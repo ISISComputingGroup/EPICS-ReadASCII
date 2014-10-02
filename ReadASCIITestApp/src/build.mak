@@ -31,6 +31,7 @@ $(APPNAME)_DBD += sscanRecord.dbd
 
 # Add all the support libraries needed by this IOC
 ## ISIS standard libraries ##
+$(APPNAME)_LIBS += ReadASCII
 $(APPNAME)_LIBS += seqDev seq pv
 $(APPNAME)_LIBS += devIocStats 
 $(APPNAME)_LIBS += pvdump easySQLite sqlite 
@@ -41,7 +42,6 @@ $(APPNAME)_LIBS += utilities
 $(APPNAME)_LIBS += asyn
 $(APPNAME)_LIBS += sscan
 ## Add other libraries here ##
-$(APPNAME)_LIBS += ReadASCII
 
 # ReadASCIITest_registerRecordDeviceDriver.cpp derives from ReadASCIITest.dbd
 $(APPNAME)_SRCS += $(APPNAME)_registerRecordDeviceDriver.cpp
