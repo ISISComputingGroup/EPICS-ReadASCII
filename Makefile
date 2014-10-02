@@ -10,6 +10,7 @@ define DIR_template
 endef
 $(foreach dir, $(filter-out configure,$(DIRS)),$(eval $(call DIR_template,$(dir))))
 
+ReadASCIITestApp_DEPEND_DIRS += ReadASCIIApp
 iocBoot_DEPEND_DIRS += $(filter %App,$(DIRS))
 
 include $(TOP)/configure/RULES_TOP
