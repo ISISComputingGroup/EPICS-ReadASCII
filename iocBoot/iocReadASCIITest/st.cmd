@@ -8,6 +8,8 @@ errlogInit2(65536, 256)
 
 < envPaths
 
+epicsEnvSet "SENS_DIR" "C:/InstrumentSettings"
+
 cd ${TOP}
 
 ## Register all support components
@@ -25,7 +27,7 @@ ReadASCIITest_registerRecordDeviceDriver pdbbase
 ## Load our record instances
 #dbLoadRecords("db/xxx.db","user=ffv81422Host")
 ReadASCIIConfigure("testREAD")
-dbLoadRecords("$(TOP)/db/ReadASCII.db","P=$(MYPVPREFIX),PORT=testREAD,ADDR=0,TIMEOUT=1")
+dbLoadRecords("$(TOP)/db/ReadASCII.db","P=$(MYPVPREFIX),READ=testREAD,ADDR=0,TIMEOUT=1, SDIR=$(SENS_DIR)")
 
 ##ISIS## Stuff that needs to be done after all records are loaded but before iocInit is called 
 ##< $(IOCSTARTUP)/preiocinit.cmd

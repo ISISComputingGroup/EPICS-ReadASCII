@@ -1,170 +1,102 @@
-#Dom test
-record(sscan, "$(P)RAMP_TEMP") {
-	field(P1PV, "$(P)IND:SP")
-	field(P1SM, "LINEAR")
-	field(P1SP, "0") #Start at current temp
-	field(P1EP, "5") #End point of ramp
-	field(P1SI, "1") #This is the amount changed per step
-	#field(PDLY, "1") #The length of time for one step
-	
-	field(EXSC, "0")
-}
-
-record(stringin, "$(P)DIR")
+#ReadASCII
+###################
+record(stringout, "$(P)DIRBASE")
 {
-   field(DTYP, "asynOctetRead")
-   field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))DIR")
-   field(SCAN, "1 second")
+   field(DTYP, "asynOctetWrite")
+   field(VAL, "$(SDIR)")
+   field(OUT, "@asyn($(READ),0,1)DIRBASE")
+   field(PINI, "1")
 }
 
 record(stringout, "$(P)DIR:SP")
 {
    field(DTYP, "asynOctetWrite")
-   field(OUT,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))DIR")
+   field(OUT,  "@asyn($(READ),0,1)DIR")
    field(OMSL, "supervisory")
 }
 
-record(ai, "$(P)ROW_NUM")
+record(ao, "$(P)TEMP:SP")
 {
-   field(PINI, "1")
+   field(DESC, "The temperature setpoint")
+   field(DTYP, "asynFloat64")
+   field(OUT, "@asyn($(READ),0,1)TGT")
+   field(EGU, "K")
+}
+
+record(ao, "$(P)RATE:SP")
+{
+   field(DESC, "Rate at which the ramp increases/decreases")
+   field(DTYP, "asynFloat64")
+   field(OUT, "@asyn($(READ),0,1)RATE")
+   field(EGU, "K/s")
+}
+
+record(bi, "$(P)RAMPING")
+{
+   field(DESC, "High if ramp is executing")
    field(DTYP, "asynInt32")
-   field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))RWNU")
-   field(SCAN, "I/O Intr")
+   field(INP,  "@asyn($(READ),0,1)CURRMP")
+   field(SCAN, "I/O Intr")   
 }
 
-record(ao, "$(P)ROW_NUM:SP")
+record(ao, "$(P)CURRENT_TEMP")
 {
-   field(PINI, "1")
+    field(DESC, "The current temperature of the sensor")
+	field(DTYP, "asynFloat64")
+	field(OUT, "@asyn($(READ),0,1)CUR")
+	field(EGU, "K")
+}
+
+record(bo, "$(P)RAMPON")
+{
+   field(DESC, "Toggles the SP ramp")
    field(DTYP, "asynInt32")
-   field(OUT,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))RWNU")
+   field(OUT,  "@asyn($(READ),0,1)RMP")
 }
 
-record(ao, "$(P)DUMMY:SP")
+record(bo, "$(P)LUTON")
 {
-   field(PINI, "1")
-   field(DTYP, "asynFloat64")
-   #field(OUT,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))RWNU")
-}
-
-record(ao, "$(P)IND:SP")
-{
-   field(PINI, "1")
+   field(DESC, "Toggles the PID lookup")
    field(DTYP, "asynInt32")
-   field(OUT,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))IND")
+   field(OUT,  "@asyn($(READ),0,1)LUT")
 }
 
-record(waveform, "$(P)ARR_COL0")
+record(ai, "$(P)OUT_SP")
 {
-    field(PINI, "1")
-    field(DTYP, "asynFloat64ArrayIn")
-    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))ARRCOL0")
-    field(FTVL, "DOUBLE")
-    field(NELM, "6")
-    field(LOPR, "0")
-    field(HOPR, "10")
-	field(SCAN, "1 second")
-}
-
-record(waveform, "$(P)ARR_COL1")
-{
-    field(PINI, "1")
-    field(DTYP, "asynFloat64ArrayIn")
-    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))ARRCOL1")
-    field(FTVL, "DOUBLE")
-    field(NELM, "6")
-    field(LOPR, "0")
-    field(HOPR, "10")
-	field(SCAN, "1 second")
-}
-
-record(waveform, "$(P)ARR_COL2")
-{
-    field(PINI, "1")
-    field(DTYP, "asynFloat64ArrayIn")
-    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))ARRCOL2")
-    field(FTVL, "DOUBLE")
-    field(NELM, "6")
-    field(LOPR, "0")
-    field(HOPR, "10")
-	field(SCAN, "1 second")
-}
-
-record(waveform, "$(P)ARR_COL3")
-{
-    field(PINI, "1")
-    field(DTYP, "asynFloat64ArrayIn")
-    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))ARRCOL3")
-    field(FTVL, "DOUBLE")
-    field(NELM, "6")
-    field(LOPR, "0")
-    field(HOPR, "10")
-	field(SCAN, "1 second")
-}
-
-record(waveform, "$(P)ARR_COL4")
-{
-    field(PINI, "1")
-    field(DTYP, "asynFloat64ArrayIn")
-    field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))ARRCOL4")
-    field(FTVL, "DOUBLE")
-    field(NELM, "6")
-    field(LOPR, "0")
-    field(HOPR, "10")
-	field(SCAN, "1 second")
-}
-
-#record(ai, "$(P)COL0")
-#{
-#   field(PINI, "1")
-#   field(DTYP, "asynFloat64")
-#   field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))COL0")
-#   field(PREC, "5")
-#   field(SCAN, "I/O Intr")
-#}
-
-record(ao, "$(P)COL0")
-{
-   field(PINI, "1")
    field(DTYP, "asynFloat64")
-   field(DOL,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))COL0")
-   field(OMSL, "closed_loop")
-   field(OIF,  "Full")
-   field(PREC, "5")
-   field(OUT,  "$(P)DUMMY:SP")
-}
-
-record(ai, "$(P)COL1")
-{
-   field(PINI, "1")
-   field(DTYP, "asynFloat64")
-   field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))COL1")
+   field(INP,  "@asyn($(READ),0,1)SP")
    field(PREC, "5")
    field(SCAN, "I/O Intr")
 }
 
-record(ai, "$(P)COL2")
+record(ai, "$(P)OUT_P")
 {
-   field(PINI, "1")
    field(DTYP, "asynFloat64")
-   field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))COL2")
+   field(INP,  "@asyn($(READ),0,1)P")
    field(PREC, "5")
    field(SCAN, "I/O Intr")
 }
 
-record(ai, "$(P)COL3")
+record(ai, "$(P)OUT_I")
 {
-   field(PINI, "1")
    field(DTYP, "asynFloat64")
-   field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))COL3")
+   field(INP,  "@asyn($(READ),0,1)I")
    field(PREC, "5")
    field(SCAN, "I/O Intr")
 }
 
-record(ai, "$(P)COL4")
+record(ai, "$(P)OUT_D")
 {
-   field(PINI, "1")
    field(DTYP, "asynFloat64")
-   field(INP,  "@asyn($(PORT),$(ADDR),$(TIMEOUT))COL4")
+   field(INP,  "@asyn($(READ),0,1)D")
    field(PREC, "5")
    field(SCAN, "I/O Intr")
 }
+
+record(ai, "$(P)OUT_MAX")
+{
+   field(DTYP, "asynFloat64")
+   field(INP,  "@asyn($(READ),0,1)MH")
+   field(PREC, "5")
+   field(SCAN, "I/O Intr")
+  }
