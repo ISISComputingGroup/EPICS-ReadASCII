@@ -91,7 +91,7 @@ ReadASCII::ReadASCII(const char *portName)
 	setDoubleParam(P_SPOut, 0.0);
 
 	lastModified = 0;
-	fileBad = true;
+	fileBad = true; //Set so that program doesn't attempt to read file before base dir is set
 
 	/* Create the thread that watches the file in the background 	*/
 	status = (asynStatus)(epicsThreadCreate("ReadASCIIFile",
@@ -112,9 +112,10 @@ ReadASCII::ReadASCII(const char *portName)
 
 }
 
-//check if directory has changed
+
 asynStatus ReadASCII::writeOctet(asynUser *pasynUser, const char *value, size_t maxChars, size_t *nActual)
 {
+	//Checks if directory has changed, reads file again if it has
 	int function = pasynUser->reason;
 	int status = asynSuccess;
 	const char *paramName;
@@ -152,9 +153,10 @@ asynStatus ReadASCII::writeOctet(asynUser *pasynUser, const char *value, size_t 
 	return (asynStatus)status;
 }
 
-//Check for updates to the index
+
 asynStatus ReadASCII::writeInt32(asynUser *pasynUser, epicsInt32 value)
 {
+	//Checks for updates to the index and on/off of PID lookup
 	int function = pasynUser->reason;
 	asynStatus status = asynSuccess;
 	const char *paramName;
@@ -223,6 +225,7 @@ asynStatus ReadASCII::writeInt32(asynUser *pasynUser, epicsInt32 value)
 
 asynStatus ReadASCII::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 {
+	//Deals with the user changing the SP target
 	int function = pasynUser->reason;
 	asynStatus status = asynSuccess;
 	int rampOn, LUTOn;
@@ -289,10 +292,10 @@ asynStatus ReadASCII::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 }
 
 
-//Return array when waveform is scanned
 asynStatus ReadASCII::readFloat64Array(asynUser *pasynUser, epicsFloat64 *value,
 	size_t nElements, size_t *nIn)
 {
+	//Return arrays when waveform is scanned
 	int ncopy;
 	int function = pasynUser->reason;
 	asynStatus status = asynSuccess;
@@ -330,6 +333,7 @@ asynStatus ReadASCII::readFloat64Array(asynUser *pasynUser, epicsFloat64 *value,
 
 void ReadASCII::rampThread(void)
 {
+	//Ramps SP values when the ramp is on
 	double wait, rate, target, curSP, newSP;
 	int ramping, rampOn, lookUpOn;
 
@@ -447,6 +451,7 @@ int ReadASCII::getSPInd (double SP)
 
 void ReadASCII::updatePID(int index)
 {
+	//Updates the PID and max heater values to those in the file on the given line
 	setDoubleParam(P_P, pP_[index]);
 	setDoubleParam(P_I, pI_[index]);
 	setDoubleParam(P_D, pD_[index]);
@@ -455,12 +460,12 @@ void ReadASCII::updatePID(int index)
 
 void ReadASCII::checkLookUp (double newSP, double oldSP)
 {
+	//Checks if the SP has crossed a threshold in the file by comparing their indices
 	int newInd, oldInd;
 
 	newInd = getSPInd(newSP);
 	oldInd = getSPInd(oldSP);
 
-	//check crossed an SP threshold
 	if (newInd != oldInd)
 	{
 		updatePID(newInd);
@@ -469,6 +474,7 @@ void ReadASCII::checkLookUp (double newSP, double oldSP)
 
 void ReadASCII::readFilePoll(void)
 {
+	//Thread to poll the file used in the PID lookup and update the array of values when the file is modified
 	char localDir[DIR_LENGTH], dirBase[DIR_LENGTH];
 	asynStatus status;
 
@@ -507,6 +513,7 @@ void ReadASCII::readFilePoll(void)
 
 asynStatus ReadASCII::readFile(const char *dir)
 {
+	//Reads PID values from a file and places them in an array
 	float SP, P, I, D, maxHeater;
 	int ind = 0;
 	FILE *fp;
@@ -545,6 +552,7 @@ asynStatus ReadASCII::readFile(const char *dir)
 
 bool ReadASCII::isModified(const char *checkDir)
 {
+	//Checks if a given directory has been modified since last check. Returns true if modified.
 	double diff = 0;
 	struct stat buf;
 	time_t newModified;
@@ -570,6 +578,7 @@ bool ReadASCII::isModified(const char *checkDir)
 
 void readFilePoll(void *drvPvt)
 {
+	//Set up a thread to read the PID file
 	ReadASCII *pPvt = (ReadASCII *)drvPvt;
 
 	pPvt->readFilePoll();
@@ -577,6 +586,7 @@ void readFilePoll(void *drvPvt)
 
 void rampThread(void *drvPvt)
 {
+	//Set up a thread to ramp the SP value
 	ReadASCII *pPvt = (ReadASCII *)drvPvt;
 
 	pPvt->rampThread();
