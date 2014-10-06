@@ -81,7 +81,7 @@ ReadASCII::ReadASCII(const char *portName)
 	pMaxHeat_ = (epicsFloat64 *)calloc(INIT_ROW_NUM, sizeof(epicsFloat64));
 
 	//Init
-	setStringParam(P_Dir, "");
+	setStringParam(P_Dir, "Default.txt");
 
 	setDoubleParam(P_RampRate, 1.0);
 	setIntegerParam(P_Ramping, 0);
@@ -178,7 +178,21 @@ asynStatus ReadASCII::writeInt32(asynUser *pasynUser, epicsInt32 value)
 			setDoubleParam(P_MaxHeat, pMaxHeat_[value]);
 		}
 	}else if (function == P_LookUpOn) {
-		//check file is loaded ok
+		//reload file if bad
+		if (true == fileBad)
+		{
+			char localDir[DIR_LENGTH], dirBase[DIR_LENGTH];
+
+			getStringParam(P_DirBase, DIR_LENGTH, dirBase);
+			getStringParam(P_Dir, DIR_LENGTH, localDir);
+
+			strcat(dirBase, "/");
+			strcat(dirBase, localDir);
+
+			status = readFile(dirBase);
+		}
+
+		//file may now be good - retry
 		if (false == fileBad)
 		{
 			//uses the current temperature to find PID values
@@ -316,7 +330,7 @@ asynStatus ReadASCII::readFloat64Array(asynUser *pasynUser, epicsFloat64 *value,
 
 void ReadASCII::rampThread(void)
 {
-	double wait, rate, target, curSP;
+	double wait, rate, target, curSP, newSP;
 	int ramping, rampOn, lookUpOn;
 
 	lock();
@@ -355,13 +369,13 @@ void ReadASCII::rampThread(void)
 		unlock(); 
 		wait = 5.0; //default wait
 
-		//check near final SP
+		//check near final SP (Doesn't work as requires ~4 seconds to write to Eurotherm) 
 		double diff = abs(target - curSP);
-		if (diff < (5 * rate))
-		{
-			//wait less time
-			wait = diff / rate;
-		}
+		//if (diff < (wait * rate))
+		//{
+		//	//wait less time
+		//	wait = diff / rate;
+		//}
 		
 		//wait
 		epicsEventWaitWithTimeout(eventId_, wait);
@@ -380,32 +394,21 @@ void ReadASCII::rampThread(void)
 		}
 
 		//rate may have changed whilst waiting
-		double newRate;
+		getDoubleParam(P_RampRate, &rate);
 
-		getDoubleParam(P_RampRate, &newRate);
-		
-		if (5.0 != wait) //last part of ramp
+		if (diff < (wait * rate))
 		{
-			if (newRate < rate){
-				continue; //more time is needed
-			}
-		}
-		else{
-			rate = newRate; //update rate
-		}
-
-		if (curSP > target)
-			rate = -rate;
-
-		//update SP with wait*rate
-		double newSP = curSP + wait*rate;
-		setDoubleParam(P_SPOut, newSP);
-
-		if (abs(newSP - target) < EPSILON)
-		{
-			//no longer ramping
+			newSP = target;
 			setIntegerParam(P_Ramping, 0);
+		}else{
+			if (curSP > target)
+				rate = -rate;
+
+			//update SP with wait*rate
+			newSP = curSP + wait*rate;
 		}
+
+		setDoubleParam(P_SPOut, newSP);
 
 		callParamCallbacks();
 
