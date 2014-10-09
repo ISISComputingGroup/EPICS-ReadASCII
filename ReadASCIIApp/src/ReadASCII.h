@@ -42,6 +42,7 @@ protected:
 	int P_CurTemp; //float
 	int P_Target; //float
 	int P_SPOut; //float
+	int P_SPRBV; //float
 
 	int P_P; //float
 	int P_I; //float
@@ -89,6 +90,7 @@ private:
 #define P_LookUpOnString "LUT"
 
 #define P_TargetString "TGT"
+#define P_SPRBVString "TGT:RBV"
 #define P_RampRateString "RATE"
 #define P_CurTempString "CUR"
 

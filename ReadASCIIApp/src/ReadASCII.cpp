@@ -64,6 +64,7 @@ ReadASCII::ReadASCII(const char *portName)
 	createParam(P_LookUpOnString, asynParamInt32, &P_LookUpOn);
 
 	createParam(P_TargetString, asynParamFloat64, &P_Target);
+	createParam(P_SPRBVString, asynParamFloat64, &P_SPRBV);
 	createParam(P_RampRateString, asynParamFloat64, &P_RampRate);
 	createParam(P_CurTempString, asynParamFloat64, &P_CurTemp);
 
@@ -334,19 +335,13 @@ asynStatus ReadASCII::readFloat64Array(asynUser *pasynUser, epicsFloat64 *value,
 void ReadASCII::rampThread(void)
 {
 	//Ramps SP values when the ramp is on
-	double wait, rate, target, curSP, newSP;
+	double wait, rate, target, curSP, newSP, SPRBV;
 	int ramping, rampOn, lookUpOn;
 
 	lock();
 
 	while (1)
 	{
-		//get rate
-		getDoubleParam(P_RampRate, &rate);
-
-		//get target
-		getDoubleParam(P_Target, &target);
-
 		//check running
 		getIntegerParam(P_Ramping, &ramping);
 
@@ -366,44 +361,70 @@ void ReadASCII::rampThread(void)
 
 		lock();
 
+		//get SP:RBV
+		getDoubleParam(P_SPRBV, &SPRBV);
+
 		//get current SP
 		getDoubleParam(P_SPOut, &curSP);
+
+		//get target
+		getDoubleParam(P_Target, &target);
+
+		if ((abs(SPRBV - target) < EPSILON) && (abs(curSP - target) < EPSILON))
+		{
+			setIntegerParam(P_Ramping, 0);
+			continue;
+		}
 
 		callParamCallbacks();
 		unlock(); 
 		wait = 5.0; //default wait
 
-		//check near final SP (Doesn't work as requires ~4 seconds to write to Eurotherm) 
-		double diff = abs(target - curSP);
+		//wait
+		epicsEventWaitWithTimeout(eventId_, wait);
+
+		//check near final SP (Doesn't work as requires long time to write to Eurotherm) 
 		//if (diff < (wait * rate))
 		//{
 		//	//wait less time
 		//	wait = diff / rate;
 		//}
 		
-		//wait
-		epicsEventWaitWithTimeout(eventId_, wait);
-
-		//check rampOn and running (could have changed whilst waiting)
 		lock();
 
+		//check rampOn (could have changed whilst waiting)
 		getIntegerParam(P_RampOn, &rampOn);
-
+		
 		if (!rampOn)
 		{
 			//no longer ramping
 			setIntegerParam(P_Ramping, 0);
-
 			continue;
 		}
 
 		//rate may have changed whilst waiting
 		getDoubleParam(P_RampRate, &rate);
+			
+		//SP may have changed
+		getDoubleParam(P_SPOut, &curSP);
+
+		//target may have changed
+		double oldTarget = target;
+		getDoubleParam(P_Target, &target);
+
+		if (oldTarget != target)
+		{
+			//start back at current temp
+			getDoubleParam(P_CurTemp, &curSP);
+			setDoubleParam(P_SPOut, curSP);
+			continue;
+		}
+
+		double diff = abs(target - curSP);
 
 		if (diff < (wait * rate))
 		{
 			newSP = target;
-			setIntegerParam(P_Ramping, 0);
 		}else{
 			if (curSP > target)
 				rate = -rate;
