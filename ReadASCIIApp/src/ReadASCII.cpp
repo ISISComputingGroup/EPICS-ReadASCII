@@ -544,7 +544,15 @@ asynStatus ReadASCII::readFile(const char *dir)
 		//ignore first line
 		fscanf(fp, "%*[^\n]\n");
 
-		while (fscanf(fp, "%f %f %f %f %f", &SP, &P, &I, &D, &maxHeater) != EOF){
+		int result = fscanf(fp, "%f %f %f %f %f", &SP, &P, &I, &D, &maxHeater);
+
+		//check for incorrect format
+		if (result < 5) {
+			std::cerr << "File format incorrect" << std::endl;
+			return asynError;
+		}
+
+		do{
 			pSP_[ind] = SP;
 			pP_[ind] = P;
 			pI_[ind] = I;
@@ -552,7 +560,8 @@ asynStatus ReadASCII::readFile(const char *dir)
 			pMaxHeat_[ind] = maxHeater;
 
 			ind++;
-		}
+
+		} while (fscanf(fp, "%f %f %f %f %f", &SP, &P, &I, &D, &maxHeater) != EOF);
 
 		rowNum = ind;
 
@@ -561,7 +570,7 @@ asynStatus ReadASCII::readFile(const char *dir)
 		fclose(fp);
 	}
 	else {
-		//send a file not found error?
+		//send a file not found error
 		std::cerr << "File Open Failed: " << dir << std::endl;
 		fileBad = true;
 		return asynError;
