@@ -8,7 +8,7 @@ errlogInit2(65536, 256)
 
 < envPaths
 
-epicsEnvSet "SENS_DIR" "C:/InstrumentSettings"
+epicsEnvSet "SENS_DIR" "C:/Instrument/Settings/calib/sensors"
 
 cd ${TOP}
 
