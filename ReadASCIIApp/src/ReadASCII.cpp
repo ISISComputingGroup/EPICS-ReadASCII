@@ -33,7 +33,7 @@ void rampThread(void *drvPvt);
 
 /// Constructor for the ReadASCII class.
 /// Calls constructor for the asynPortDriver base class.
-ReadASCII::ReadASCII(const char *portName) 
+ReadASCII::ReadASCII(const char *portName, const char *searchDir)
    : asynPortDriver(portName, 
                     4, /* maxAddr */ 
                     NUM_READASCII_PARAMS,
@@ -83,6 +83,7 @@ ReadASCII::ReadASCII(const char *portName)
 
 	//Init
 	setStringParam(P_Dir, "Default.txt");
+	setStringParam(P_DirBase, searchDir);
 
 	setDoubleParam(P_RampRate, 1.0);
 	setIntegerParam(P_Ramping, 0);
@@ -113,7 +114,6 @@ ReadASCII::ReadASCII(const char *portName)
 
 }
 
-
 asynStatus ReadASCII::writeOctet(asynUser *pasynUser, const char *value, size_t maxChars, size_t *nActual)
 {
 	//Checks if directory has changed, reads file again if it has
@@ -128,18 +128,9 @@ asynStatus ReadASCII::writeOctet(asynUser *pasynUser, const char *value, size_t 
 	/* Fetch the parameter string name for possible use in debugging */
 	getParamName(function, &paramName);
 
-	if (function == P_Dir) {
-
-		// Directory has changed so update length
-		if (value != ""){
-			char dirBase[DIR_LENGTH];
-
-			fileBad = false;
-			getStringParam(P_DirBase, DIR_LENGTH, dirBase);
-
-			strcat(dirBase, "/");
-			status |= readFile(strcat(dirBase, value));
-		}
+	if (function == P_Dir | function == P_DirBase) {
+		// Directory has changed so update
+		status |= readFileBasedOnParameters();
 	}
 
 	/* Do callbacks so higher layers see any changes */
@@ -154,6 +145,48 @@ asynStatus ReadASCII::writeOctet(asynUser *pasynUser, const char *value, size_t 
 	return (asynStatus)status;
 }
 
+/// Read Values as Octet
+asynStatus ReadASCII::readOctet(asynUser *pasynUser, char *value, size_t maxChars, size_t *nActual, int *eomReason)
+{
+	//Checks if directory has changed, reads file again if it has
+	int function = pasynUser->reason;
+	asynStatus status = asynSuccess;
+	const char *paramName;
+	const char* functionName = "readOctet";
+
+	/* Fetch the parameter string name for possible use in debugging */
+	getParamName(function, &paramName);
+
+	if (function == P_DirBase) {
+		char dirBase[DIR_LENGTH];
+		getStringParam(P_DirBase, DIR_LENGTH, dirBase);
+
+		strncpy(value, dirBase, maxChars);
+		*nActual = strlen(dirBase);
+		std::cerr << status << "new dir base " << dirBase << std::endl;
+	} else {
+		status = asynError;
+		epicsSnprintf(pasynUser->errorMessage, pasynUser->errorMessageSize,
+				"%s:%s: status=%d, function=%d, name=%s function does not have read.",
+				driverName, functionName, status, function, paramName);
+	}
+
+	return status;
+
+}
+
+/// Read the file ramp file based on the parameters in dir and base
+asynStatus ReadASCII::readFileBasedOnParameters() {
+
+	char localDir[DIR_LENGTH], dirBase[DIR_LENGTH * 2 + 1];
+	getStringParam(P_DirBase, DIR_LENGTH, dirBase);
+	getStringParam(P_Dir, DIR_LENGTH, localDir);
+	strcat(dirBase, "/");
+	strcat(dirBase, localDir);
+	asynStatus status = readFile(dirBase);
+	setParamStatus(P_Dir, (asynStatus) status);
+	return status;
+}
 
 asynStatus ReadASCII::writeInt32(asynUser *pasynUser, epicsInt32 value)
 {
@@ -184,15 +217,7 @@ asynStatus ReadASCII::writeInt32(asynUser *pasynUser, epicsInt32 value)
 		//reload file if bad
 		if (true == fileBad)
 		{
-			char localDir[DIR_LENGTH], dirBase[DIR_LENGTH];
-
-			getStringParam(P_DirBase, DIR_LENGTH, dirBase);
-			getStringParam(P_Dir, DIR_LENGTH, localDir);
-
-			strcat(dirBase, "/");
-			strcat(dirBase, localDir);
-
-			status = readFile(dirBase);
+			status = readFileBasedOnParameters();
 		}
 
 		//file may now be good - retry
@@ -549,6 +574,7 @@ asynStatus ReadASCII::readFile(const char *dir)
 		//check for incorrect format
 		if (result < 5) {
 			std::cerr << "File format incorrect" << std::endl;
+			fileBad = true;
 			return asynError;
 		}
 
@@ -576,6 +602,7 @@ asynStatus ReadASCII::readFile(const char *dir)
 		return asynError;
 	}	
 
+	fileBad = false;
 	return asynSuccess;
 	
 }
@@ -627,11 +654,12 @@ extern "C" {
 
 /// EPICS iocsh callable function to call constructor of ReadASCII().
 /// \param[in] portName @copydoc initArg0
-int ReadASCIIConfigure(const char *portName)
+/// \param[in] rampDir @copydoc initArg0
+int ReadASCIIConfigure(const char *portName, const char *rampDir)
 {
 	try
 	{
-		new ReadASCII(portName);
+		new ReadASCII(portName, rampDir);
 		return(asynSuccess);
 	}
 	catch(const std::exception& ex)
@@ -644,14 +672,15 @@ int ReadASCIIConfigure(const char *portName)
 // EPICS iocsh shell commands 
 
 static const iocshArg initArg0 = { "portName", iocshArgString};			///< The name of the asyn driver port we will create
+static const iocshArg initArg1 = { "rampDir",iocshArgString};           ///< Initial ramp dir
 
-static const iocshArg * const initArgs[] = { &initArg0 };
+static const iocshArg * const initArgs[] = { &initArg0, &initArg1 };
 
 static const iocshFuncDef initFuncDef = {"ReadASCIIConfigure", sizeof(initArgs) / sizeof(iocshArg*), initArgs};
 
 static void initCallFunc(const iocshArgBuf *args)
 {
-    ReadASCIIConfigure(args[0].sval);
+    ReadASCIIConfigure(args[0].sval, args[1].sval);
 }
 
 static void ReadASCIIRegister(void)
