@@ -12,13 +12,15 @@
 class ReadASCII : public asynPortDriver 
 {
 public:
-    ReadASCII(const char* portName);
+    ReadASCII(const char* portName, const char *searchDir);
+
 
 	virtual asynStatus writeOctet(asynUser *pasynUser, const char *value, size_t maxChars, size_t *nActual);
 	virtual asynStatus writeInt32(asynUser *pasynUser, epicsInt32 value);
 	virtual asynStatus writeFloat64(asynUser *pasynUser, epicsFloat64 value);
 
 	virtual asynStatus readFloat64Array(asynUser *pasynUser, epicsFloat64 *value, size_t nElements, size_t *nIn);
+	virtual asynStatus readOctet(asynUser *pasynUser, char *value, size_t maxChars, size_t *nActual, int *eomReason);
 
 	void readFilePoll(void);
 	void rampThread(void);
@@ -67,10 +69,10 @@ private:
 	void checkLookUp (double newSP, double oldSP);
 	int getSPInd (double SP);
 	void updatePID(int index);
+	asynStatus readFileBasedOnParameters();
 	
 #define FIRST_READASCII_PARAM P_Dir
 #define LAST_READASCII_PARAM P_MaxHeat
-	
 };
 
 #define NUM_READASCII_PARAMS (&LAST_READASCII_PARAM - &FIRST_READASCII_PARAM + 1)
