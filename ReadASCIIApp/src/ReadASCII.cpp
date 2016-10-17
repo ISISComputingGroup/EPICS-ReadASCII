@@ -90,7 +90,7 @@ ReadASCII::ReadASCII(const char *portName, const char *searchDir)
 	setIntegerParam(P_RampOn, 0);
 	setIntegerParam(P_LookUpOn, 0);
 
-	setDoubleParam(P_SPOut, 0.0);
+	// Do no initialise P_SPOut here because it will be sent to the eurotherm
 
 	lastModified = 0;
 	fileBad = true; //Set so that program doesn't attempt to read file before base dir is set
