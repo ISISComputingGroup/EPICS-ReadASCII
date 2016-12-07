@@ -35,11 +35,11 @@ void rampThread(void *drvPvt);
 /// Calls constructor for the asynPortDriver base class.
 ReadASCII::ReadASCII(const char *portName, const char *searchDir)
    : asynPortDriver(portName, 
-                    4, /* maxAddr */ 
+                    0, /* maxAddr */ 
                     NUM_READASCII_PARAMS,
 					asynInt32Mask | asynFloat64Mask | asynFloat64ArrayMask | asynOctetMask | asynDrvUserMask, /* Interface mask */
-                    asynInt32Mask | asynFloat64Mask | asynOctetMask,  /* Interrupt mask */
-                    0, /* asynFlags.  This driver can block but it is not multi-device */
+                    asynInt32Mask | asynFloat64Mask | asynFloat64ArrayMask | asynOctetMask,  /* Interrupt mask */
+                    ASYN_CANBLOCK, /* asynFlags.  This driver can block but it is not multi-device */
                     1, /* Autoconnect */
                     0, /* Default priority */
                     0)	/* Default stack size*/
@@ -102,11 +102,14 @@ ReadASCII::ReadASCII(const char *portName, const char *searchDir)
 		(EPICSTHREADFUNC)::readFilePoll,
 		this) == NULL);
 	/* Create the thread that ramps the output 	*/
-	status = (asynStatus)(epicsThreadCreate("ReadASCIIRamp",
-		epicsThreadPriorityMedium,
-		epicsThreadGetStackSize(epicsThreadStackMedium),
-		(EPICSTHREADFUNC)::rampThread,
-		this) == NULL);
+	if (status == asynSuccess)
+	{	
+        status = (asynStatus)(epicsThreadCreate("ReadASCIIRamp",
+		    epicsThreadPriorityMedium,
+		    epicsThreadGetStackSize(epicsThreadStackMedium),
+		    (EPICSTHREADFUNC)::rampThread,
+		    this) == NULL);
+	}
 	if (status) {
 		std::cerr << status << "epicsThreadCreate failure\n";
 		return;
