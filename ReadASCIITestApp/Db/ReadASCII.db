@@ -28,7 +28,7 @@ record(ao, "$(P)RATE:SP")
    field(DESC, "Rate the ramp increases/decreases")
    field(DTYP, "asynFloat64")
    field(OUT, "@asyn($(READ),0,1)RATE")
-   field(EGU, "K/s")
+   field(EGU, "K/min")
 }
 
 record(bi, "$(P)RAMPING")
