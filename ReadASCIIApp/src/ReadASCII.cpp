@@ -362,6 +362,7 @@ asynStatus ReadASCII::readFloat64Array(asynUser *pasynUser, epicsFloat64 *value,
 
 void ReadASCII::rampThread(void)
 {
+    const double SECONDS_IN_MINUTE = 60.0;
 	//Ramps SP values when the ramp is on
 	double wait, rate, target, curSP, newSP, SPRBV;
 	int ramping, rampOn, lookUpOn;
@@ -432,6 +433,8 @@ void ReadASCII::rampThread(void)
 
 		//rate may have changed whilst waiting
 		getDoubleParam(P_RampRate, &rate);
+        // convert from K/min to K/s
+        rate /= SECONDS_IN_MINUTE;
 			
 		//SP may have changed
 		getDoubleParam(P_SPOut, &curSP);

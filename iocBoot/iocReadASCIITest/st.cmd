@@ -8,7 +8,7 @@ errlogInit2(65536, 256)
 
 < envPaths
 
-epicsEnvSet "SENS_DIR" "C:/Instrument/Settings/calib/sensors"
+epicsEnvSet "RAMP_DIR" "$(TOP)/example_settings"
 
 cd ${TOP}
 
@@ -17,7 +17,7 @@ dbLoadDatabase("dbd/ReadASCIITest.dbd")
 ReadASCIITest_registerRecordDeviceDriver pdbbase
 
 ##ISIS## Run IOC initialisation 
-##< $(IOCSTARTUP)/init.cmd
+< $(IOCSTARTUP)/init.cmd
 
 ## Load record instances
 
@@ -26,8 +26,8 @@ ReadASCIITest_registerRecordDeviceDriver pdbbase
 
 ## Load our record instances
 #dbLoadRecords("db/xxx.db","user=ffv81422Host")
-ReadASCIIConfigure("testREAD")
-dbLoadRecords("$(TOP)/db/ReadASCII.db","P=$(MYPVPREFIX),READ=testREAD,ADDR=0,TIMEOUT=1, SDIR=$(SENS_DIR)")
+ReadASCIIConfigure("testREAD", "$(RAMP_DIR)")
+dbLoadRecords("$(TOP)/db/ReadASCII.db","P=$(MYPVPREFIX)$(IOCNAME):,READ=testREAD,ADDR=0,TIMEOUT=1, RDIR=$(RAMP_DIR)")
 
 ##ISIS## Stuff that needs to be done after all records are loaded but before iocInit is called 
 ##< $(IOCSTARTUP)/preiocinit.cmd
