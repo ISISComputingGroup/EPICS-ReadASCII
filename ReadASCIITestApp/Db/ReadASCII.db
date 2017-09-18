@@ -1,26 +1,38 @@
 #ReadASCII
 ###################
-record(stringout, "$(P)DIRBASE")
+record(waveform, "$(P)DIRBASE:SP")
 {
    field(DTYP, "asynOctetWrite")
-   field(VAL, "$(SDIR)")
-   field(OUT, "@asyn($(READ),0,1)DIRBASE")
-   field(PINI, "1")
+   field(INP, "@asyn($(READ),0,1)DIRBASE")
+   field(PINI, "NO")
+   field(FTVL, "CHAR")
+   field(NELM, 256)
 }
 
-record(stringout, "$(P)DIR:SP")
+record(waveform, "$(P)DIRBASE")
 {
-   field(DTYP, "asynOctetWrite")
-   field(OUT,  "@asyn($(READ),0,1)DIR")
-   field(OMSL, "supervisory")
+   field(DTYP, "asynOctetRead")
+   field(INP, "@asyn($(READ),0,1)DIRBASE")
+   field(PINI, "YES")
+   field(FTVL, "CHAR")
+   field(NELM, 256)
+   field(SCAN, "I/O Intr")
 }
 
-record(ao, "$(P)TEMP:SP")
+record(ao, "$(P)VAL:SP")
 {
-   field(DESC, "The temperature setpoint")
+   field(DESC, "The value setpoint")
    field(DTYP, "asynFloat64")
    field(OUT, "@asyn($(READ),0,1)TGT")
-   field(EGU, "K")
+}
+
+record(ai, "$(P)RATE")
+{
+   field(DESC, "Rate the ramp increases/decreases")
+   field(DTYP, "asynFloat64")
+   field(INP, "@asyn($(READ),0,1)RATE")
+   field(EGU, "1/min")
+   field(SCAN, "I/O Intr")
 }
 
 record(ao, "$(P)RATE:SP")
@@ -39,12 +51,12 @@ record(bi, "$(P)RAMPING")
    field(SCAN, "I/O Intr")   
 }
 
-record(ao, "$(P)CURRENT_TEMP")
+## The ramp will stop when this matches the set point that the ramp is outputting (OUT_SP)
+record(ao, "$(P)CURRENT_VAL")
 {
-    field(DESC, "The current temperature of the sensor")
+    field(DESC, "The readback of the ramping val")
 	field(DTYP, "asynFloat64")
 	field(OUT, "@asyn($(READ),0,1)CUR")
-	field(EGU, "K")
 }
 
 record(bo, "$(P)RAMPON")
@@ -63,6 +75,7 @@ record(bo, "$(P)LUTON")
 
 record(ai, "$(P)OUT_SP")
 {
+    field(DESC, "The value that the ramp is setting")
    field(DTYP, "asynFloat64")
    field(INP,  "@asyn($(READ),0,1)SP")
    field(PREC, "5")
