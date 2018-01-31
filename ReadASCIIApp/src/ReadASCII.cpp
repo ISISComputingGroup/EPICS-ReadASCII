@@ -230,10 +230,9 @@ asynStatus ReadASCII::writeInt32(asynUser *pasynUser, epicsInt32 value)
 			//uses the current temperature to find PID values
 			if (value)
 			{
-				double sp_rbv;
-
-				getDoubleParam(P_SPRBV, &sp_rbv);
-				updatePID(getSPInd(sp_rbv));
+				double curTemp;
+				getDoubleParam(P_CurTemp, &curTemp);
+				updatePID(getSPInd(curTemp));
 			}
 		}
 	}
