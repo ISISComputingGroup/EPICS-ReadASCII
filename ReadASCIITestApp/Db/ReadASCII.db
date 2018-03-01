@@ -19,6 +19,20 @@ record(waveform, "$(P)DIRBASE")
    field(SCAN, "I/O Intr")
 }
 
+record(stringin, "$(P)RAMP_FILE")
+{
+   field(DTYP, "asynOctetRead")
+   field(INP,  "@asyn($(READ),0,1)DIR")
+   field(SCAN, "I/O Intr")
+}
+
+record(stringout, "$(P)RAMP_FILE:SP")
+{
+   field(DTYP, "asynOctetWrite")
+   field(OUT,  "@asyn($(READ),0,1)DIR")
+   field(SCAN, "I/O Intr")
+}
+
 record(ao, "$(P)VAL:SP")
 {
    field(DESC, "The value setpoint")

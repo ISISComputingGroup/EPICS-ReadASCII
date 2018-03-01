@@ -217,6 +217,7 @@ asynStatus ReadASCII::writeInt32(asynUser *pasynUser, epicsInt32 value)
 			setDoubleParam(P_MaxHeat, pMaxHeat_[value]);
 		}
 	}else if (function == P_LookUpOn) {
+
 		//reload file if bad
 		if (true == fileBad)
 		{
@@ -230,7 +231,6 @@ asynStatus ReadASCII::writeInt32(asynUser *pasynUser, epicsInt32 value)
 			if (value)
 			{
 				double curTemp;
-
 				getDoubleParam(P_CurTemp, &curTemp);
 				updatePID(getSPInd(curTemp));
 			}
@@ -503,10 +503,16 @@ int ReadASCII::getSPInd (double SP)
 
 void ReadASCII::updatePID(int index)
 {
-	//Updates the PID and max heater values to those in the file on the given line
+
+    // Set to minus one first and then the actual value.
+	// This marks the value as "changed" so that the monitor actually gets fired.
+	setDoubleParam(P_P, -1);
 	setDoubleParam(P_P, pP_[index]);
+	setDoubleParam(P_I, -1);
 	setDoubleParam(P_I, pI_[index]);
+	setDoubleParam(P_D, -1);
 	setDoubleParam(P_D, pD_[index]);
+	setDoubleParam(P_MaxHeat, -1);
 	setDoubleParam(P_MaxHeat, pMaxHeat_[index]);
 }
 
