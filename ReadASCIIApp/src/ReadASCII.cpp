@@ -25,7 +25,7 @@
 
 #include <epicsExport.h>
 
-#define INIT_ROW_NUM 20
+#define INIT_ROW_NUM 60
 #define EPSILON 0.001
 
 static const char *driverName="ReadASCII";
