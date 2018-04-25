@@ -14,6 +14,7 @@
 #include <epicsMutex.h>
 #include <epicsEvent.h>
 #include <iocsh.h>
+#include <errlog.h>
 
 #include <sys/stat.h>
 
@@ -211,12 +212,19 @@ asynStatus ReadASCII::writeInt32(asynUser *pasynUser, epicsInt32 value)
 
 		if (LUTOn)
 		{
-			//update all column floats
-			setDoubleParam(P_SPOut, pSP_[value]);
-			setDoubleParam(P_P, pP_[value]);
-			setDoubleParam(P_I, pI_[value]);
-			setDoubleParam(P_D, pD_[value]);
-			setDoubleParam(P_MaxHeat, pMaxHeat_[value]);
+			if (value >= 0 && value < rowNum)
+		    {
+			    //update all column floats
+			    setDoubleParam(P_SPOut, pSP_[value]);
+			    setDoubleParam(P_P, pP_[value]);
+			    setDoubleParam(P_I, pI_[value]);
+			    setDoubleParam(P_D, pD_[value]);
+			    setDoubleParam(P_MaxHeat, pMaxHeat_[value]);
+			}
+			else
+			{
+				errlogSevPrintf(errlogMajor, "Index %d out of range for lookup table", value);
+			}
 		}
 	}else if (function == P_LookUpOn) {
 
@@ -337,7 +345,7 @@ asynStatus ReadASCII::readFloat64Array(asynUser *pasynUser, epicsFloat64 *value,
 	asynStatus status = asynSuccess;
 	const char *functionName = "readFloat64Array";
 
-	ncopy = ((nElements < rowNum) ? nElements : rowNum);
+	ncopy = ( (nElements < rowNum) ? nElements : rowNum );
 	if (function == P_SPArr) {
 		memcpy(value, pSP_, ncopy*sizeof(epicsFloat64));
 	}
@@ -408,10 +416,10 @@ void ReadASCII::rampThread(void)
 		if ((abs(SPRBV - target) < EPSILON) && (abs(curSP - target) < EPSILON))
 		{
 			setIntegerParam(P_Ramping, 0);
+			callParamCallbacks();
 			continue;
 		}
 
-		callParamCallbacks();
 		unlock(); 
 		wait = 5.0; //default wait
 
@@ -434,6 +442,7 @@ void ReadASCII::rampThread(void)
 		{
 			//no longer ramping
 			setIntegerParam(P_Ramping, 0);
+			callParamCallbacks();
 			continue;
 		}
 
@@ -454,15 +463,15 @@ void ReadASCII::rampThread(void)
 			//start back at current temp
 			getDoubleParam(P_CurTemp, &curSP);
 			setDoubleParam(P_SPOut, curSP);
+			callParamCallbacks();
 			continue;
 		}
 
 		double diff = abs(target - curSP);
 
-		if (diff < (wait * rate))
-		{
+		if (diff < (wait * rate)) {
 			newSP = target;
-		}else{
+		} else {
 			if (curSP > target)
 				rate = -rate;
 
@@ -472,15 +481,14 @@ void ReadASCII::rampThread(void)
 
 		setDoubleParam(P_SPOut, newSP);
 
-		callParamCallbacks();
-
 		//check PID table in use
 		getIntegerParam(P_LookUpOn, &lookUpOn);
-
 		if (lookUpOn)
 		{
 			checkLookUp(newSP, curSP);
 		}
+		
+		callParamCallbacks();
 	}
 
 }
@@ -497,18 +505,18 @@ int ReadASCII::getSPInd (double SP)
 		{
 			if (i==0)
 			{
-				std::cerr << "SP Out of Look Up Lower Range" << std::endl;
+				std::cerr << "SP below Look Up Lower Range, " << SP << " < " << pSP_[0] << std::endl;
 				return 0;
 			}
 			else
-				return i-1;
+				return i - 1;
 		}
 	}
 	if (rowNum > 0)
 	{
-	    std::cerr << "SP Out of Look Up Higher Range" << std::endl;
+	    std::cerr << "SP above Look Up Higher Range, " << SP << " > " << pSP_[rowNum - 1] << std::endl;
 	}
-	return rowNum-1;
+	return rowNum - 1;
 }
 
 void ReadASCII::updatePID(int index)
@@ -616,11 +624,15 @@ asynStatus ReadASCII::readFile(const char *dir)
 
 		} while (fscanf(fp, "%f %f %f %f %f", &SP, &P, &I, &D, &maxHeater) != EOF && ind < INIT_ROW_NUM);
 
+		fclose(fp);
+
 		rowNum = ind;
 
-		callParamCallbacks();
-
-		fclose(fp);
+		doCallbacksFloat64Array(pSP_, rowNum, P_SPArr, 0);
+		doCallbacksFloat64Array(pP_, rowNum, P_PArr, 0);
+		doCallbacksFloat64Array(pI_, rowNum, P_IArr, 0);
+		doCallbacksFloat64Array(pD_, rowNum, P_DArr, 0);
+		doCallbacksFloat64Array(pMaxHeat_, rowNum, P_MaxHeatArr, 0);
 	}
 	else {
 		//send a file not found error
@@ -637,7 +649,7 @@ asynStatus ReadASCII::readFile(const char *dir)
 bool ReadASCII::isModified(const char *checkDir)
 {
 	//Checks if a given directory has been modified since last check. Returns true if modified.
-	double diff = 0;
+	double diff = 0.0;
 	struct stat buf;
 	time_t newModified;
 
@@ -649,7 +661,7 @@ bool ReadASCII::isModified(const char *checkDir)
 
 		lastModified = newModified;
 
-		if (0 == diff) return false;
+		if (0.0 == diff) return false;
 		else return true;
 	}
 	else{
