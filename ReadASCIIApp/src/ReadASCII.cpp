@@ -94,6 +94,7 @@ ReadASCII::ReadASCII(const char *portName, const char *searchDir)
 
 	lastModified = 0;
 	fileBad = true; //Set so that program doesn't attempt to read file before base dir is set
+	rowNum = 0;
 
 	/* Create the thread that watches the file in the background 	*/
 	status = (asynStatus)(epicsThreadCreate("ReadASCIIFile",
@@ -131,7 +132,7 @@ asynStatus ReadASCII::writeOctet(asynUser *pasynUser, const char *value, size_t 
 	/* Fetch the parameter string name for possible use in debugging */
 	getParamName(function, &paramName);
 
-	if (function == P_Dir | function == P_DirBase) {
+	if (function == P_Dir || function == P_DirBase) {
 		// Directory has changed so update
 		status |= readFileBasedOnParameters();
 	}
@@ -198,8 +199,9 @@ asynStatus ReadASCII::writeInt32(asynUser *pasynUser, epicsInt32 value)
 	asynStatus status = asynSuccess;
 	const char *paramName;
 	const char* functionName = "writeInt32";
-	int LUTOn;
+	int LUTOn = 0;
 
+	getParamName(function, &paramName);
 	/* Set the parameter in the parameter library. */
 	status = (asynStatus)setIntegerParam(function, value);
 
@@ -235,6 +237,10 @@ asynStatus ReadASCII::writeInt32(asynUser *pasynUser, epicsInt32 value)
 				updatePID(getSPInd(curTemp));
 			}
 		}
+		else
+		{
+			setIntegerParam(P_LookUpOn, 0); // turn off lookup if file bad
+		}
 	}
 
 	/* Do callbacks so higher layers see any changes */
@@ -257,7 +263,7 @@ asynStatus ReadASCII::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 	//Deals with the user changing the SP target
 	int function = pasynUser->reason;
 	asynStatus status = asynSuccess;
-	int rampOn, LUTOn;
+	int rampOn = 0, LUTOn = 0;
 	const char *paramName;
 	const char* functionName = "writeFloat64";
 
@@ -297,6 +303,7 @@ asynStatus ReadASCII::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 		} else {
 			//directly output SP
 			setDoubleParam(P_SPOut, value);
+			setIntegerParam(P_Ramping, 0);
 
 			//update PIDs
 			if (LUTOn)
@@ -330,8 +337,7 @@ asynStatus ReadASCII::readFloat64Array(asynUser *pasynUser, epicsFloat64 *value,
 	asynStatus status = asynSuccess;
 	const char *functionName = "readFloat64Array";
 
-	if (nElements < ncopy) ncopy = nElements;
-	else ncopy = rowNum;
+	ncopy = ((nElements < rowNum) ? nElements : rowNum);
 	if (function == P_SPArr) {
 		memcpy(value, pSP_, ncopy*sizeof(epicsFloat64));
 	}
@@ -479,6 +485,7 @@ void ReadASCII::rampThread(void)
 
 }
 
+// if file is bad, rowNum == 0 and so returns -1
 int ReadASCII::getSPInd (double SP)
 {
 	//NOTE: this assumes the lookup table is in order
@@ -490,20 +497,26 @@ int ReadASCII::getSPInd (double SP)
 		{
 			if (i==0)
 			{
-				std::cerr << "SP Out of Look Up Range" << std::endl;
+				std::cerr << "SP Out of Look Up Lower Range" << std::endl;
 				return 0;
 			}
 			else
 				return i-1;
 		}
 	}
-
+	if (rowNum > 0)
+	{
+	    std::cerr << "SP Out of Look Up Higher Range" << std::endl;
+	}
 	return rowNum-1;
 }
 
 void ReadASCII::updatePID(int index)
 {
-
+	if (index < 0 || index >= rowNum)
+	{
+		return;
+	}
     // Set to minus one first and then the actual value.
 	// This marks the value as "changed" so that the monitor actually gets fired.
 	setDoubleParam(P_P, -1);
@@ -575,8 +588,9 @@ asynStatus ReadASCII::readFile(const char *dir)
 	float SP, P, I, D, maxHeater;
 	int ind = 0;
 	FILE *fp;
+	rowNum = 0;
 
-	if (NULL != (fp = fopen(dir, "r"))) {
+	if (NULL != (fp = fopen(dir, "rt"))) {
 
 		//ignore first line
 		fscanf(fp, "%*[^\n]\n");
@@ -586,6 +600,7 @@ asynStatus ReadASCII::readFile(const char *dir)
 		//check for incorrect format
 		if (result < 5) {
 			std::cerr << "File format incorrect" << std::endl;
+		    fclose(fp);
 			fileBad = true;
 			return asynError;
 		}
@@ -599,7 +614,7 @@ asynStatus ReadASCII::readFile(const char *dir)
 
 			ind++;
 
-		} while (fscanf(fp, "%f %f %f %f %f", &SP, &P, &I, &D, &maxHeater) != EOF);
+		} while (fscanf(fp, "%f %f %f %f %f", &SP, &P, &I, &D, &maxHeater) != EOF && ind < INIT_ROW_NUM);
 
 		rowNum = ind;
 
