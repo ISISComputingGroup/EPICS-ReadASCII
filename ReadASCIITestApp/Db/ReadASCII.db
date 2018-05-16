@@ -63,6 +63,8 @@ record(bi, "$(P)RAMPING")
    field(DTYP, "asynInt32")
    field(INP,  "@asyn($(READ),0,1)CURRMP")
    field(SCAN, "I/O Intr")   
+   field(ZNAM, "NO")
+   field(ONAM, "YES")
 }
 
 ## The ramp will stop when this matches the set point that the ramp is outputting (OUT_SP)
