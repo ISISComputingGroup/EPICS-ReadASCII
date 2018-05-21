@@ -113,7 +113,7 @@ ReadASCII::ReadASCII(const char *portName, const char *searchDir)
 		    this) == NULL);
 	}
 	if (status) {
-		std::cerr << status << "epicsThreadCreate failure\n";
+		std::cerr << "ReadASCII: epicsThreadCreate failure " << status << std::endl;
 		return;
 	}
 
@@ -168,7 +168,7 @@ asynStatus ReadASCII::readOctet(asynUser *pasynUser, char *value, size_t maxChar
 
 		strncpy(value, dirBase, maxChars);
 		*nActual = strlen(dirBase);
-		std::cerr << status << "new dir base " << dirBase << std::endl;
+		std::cerr << "ReadASCII: new dir base " << dirBase << std::endl;
 	} else {
 		status = asynError;
 		epicsSnprintf(pasynUser->errorMessage, pasynUser->errorMessageSize,
@@ -220,6 +220,8 @@ asynStatus ReadASCII::writeInt32(asynUser *pasynUser, epicsInt32 value)
 			    setDoubleParam(P_I, pI_[value]);
 			    setDoubleParam(P_D, pD_[value]);
 			    setDoubleParam(P_MaxHeat, pMaxHeat_[value]);
+				std::cerr << "ReadASCII: Setting SP to " << pSP_[value] << std::endl;
+				std::cerr << "ReadASCII: Updating P=" << pP_[value] << " I=" << pI_[value] << " D=" << pD_[value] << " MP=" << pMaxHeat_[value] << std::endl;
 			}
 			else
 			{
@@ -237,6 +239,7 @@ asynStatus ReadASCII::writeInt32(asynUser *pasynUser, epicsInt32 value)
 		//file may now be good - retry
 		if (false == fileBad)
 		{
+			setIntegerParam(P_LookUpOn, value);
 			//uses the current temperature to find PID values
 			if (value)
 			{
@@ -295,6 +298,7 @@ asynStatus ReadASCII::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 			//get current temperature and set as SP
 			getDoubleParam(P_CurTemp, &startTemp);
 			setDoubleParam(P_SPOut, startTemp);
+		    std::cerr << "ReadASCII: Setting SP to " << startTemp << " and ramping" << std::endl;
 
 			//update PIDs
 			if (LUTOn)
@@ -312,6 +316,7 @@ asynStatus ReadASCII::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 			//directly output SP
 			setDoubleParam(P_SPOut, value);
 			setIntegerParam(P_Ramping, 0);
+		    std::cerr << "ReadASCII: Setting SP to " << value << " (no ramp)" << std::endl;
 
 			//update PIDs
 			if (LUTOn)
@@ -463,6 +468,7 @@ void ReadASCII::rampThread(void)
 			//start back at current temp
 			getDoubleParam(P_CurTemp, &curSP);
 			setDoubleParam(P_SPOut, curSP);
+		    std::cerr << "ReadASCII: RAMP: new SP " << newSP << std::endl;
 			callParamCallbacks();
 			continue;
 		}
@@ -480,6 +486,7 @@ void ReadASCII::rampThread(void)
 		}
 
 		setDoubleParam(P_SPOut, newSP);
+		std::cerr << "ReadASCII: RAMP: new SP " << newSP << std::endl;
 
 		//check PID table in use
 		getIntegerParam(P_LookUpOn, &lookUpOn);
@@ -505,7 +512,7 @@ int ReadASCII::getSPInd (double SP)
 		{
 			if (i==0)
 			{
-				std::cerr << "SP below Look Up Lower Range, " << SP << " < " << pSP_[0] << std::endl;
+				std::cerr << "ReadASCII: SP below Look Up Lower Range, " << SP << " < " << pSP_[0] << std::endl;
 				return 0;
 			}
 			else
@@ -514,7 +521,7 @@ int ReadASCII::getSPInd (double SP)
 	}
 	if (rowNum > 0)
 	{
-	    std::cerr << "SP above Look Up Higher Range, " << SP << " > " << pSP_[rowNum - 1] << std::endl;
+	    std::cerr << "ReadASCII: SP above Look Up Higher Range, " << SP << " > " << pSP_[rowNum - 1] << std::endl;
 	}
 	return rowNum - 1;
 }
@@ -535,6 +542,7 @@ void ReadASCII::updatePID(int index)
 	setDoubleParam(P_D, pD_[index]);
 	setDoubleParam(P_MaxHeat, -1);
 	setDoubleParam(P_MaxHeat, pMaxHeat_[index]);
+	std::cerr << "ReadASCII: Updating P=" << pP_[index] << " I=" << pI_[index] << " D=" << pD_[index] << " MP=" << pMaxHeat_[index] << std::endl;
 }
 
 void ReadASCII::checkLookUp (double newSP, double oldSP)
@@ -607,7 +615,7 @@ asynStatus ReadASCII::readFile(const char *dir)
 
 		//check for incorrect format
 		if (result < 5) {
-			std::cerr << "File format incorrect" << std::endl;
+			std::cerr << "ReadASCII: File format incorrect: " << dir << std::endl;
 		    fclose(fp);
 			fileBad = true;
 			return asynError;
@@ -633,10 +641,11 @@ asynStatus ReadASCII::readFile(const char *dir)
 		doCallbacksFloat64Array(pI_, rowNum, P_IArr, 0);
 		doCallbacksFloat64Array(pD_, rowNum, P_DArr, 0);
 		doCallbacksFloat64Array(pMaxHeat_, rowNum, P_MaxHeatArr, 0);
+		std::cerr << "ReadASCII: read " << rowNum << " lines from file: " << dir << std::endl;
 	}
 	else {
 		//send a file not found error
-		std::cerr << "File Open Failed: " << dir << std::endl;
+		std::cerr << "ReadASCII: File Open Failed: " << dir << std::endl;
 		fileBad = true;
 		return asynError;
 	}	
@@ -666,7 +675,7 @@ bool ReadASCII::isModified(const char *checkDir)
 	}
 	else{
 		//send a file not found error?
-		std::cerr << "File Modified Check Failed: " << checkDir << std::endl;
+		std::cerr << "ReadASCII: File Modified Check Failed: " << checkDir << std::endl;
 		return true;
 	}
 
