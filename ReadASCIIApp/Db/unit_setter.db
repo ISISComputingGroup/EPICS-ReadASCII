@@ -1,0 +1,25 @@
+#
+# Macros:
+# DIR - the pv name of a record that does conversions
+# CAL - the calibration file readback PV
+# OUT - the PV to write the units to.
+#
+
+record(aSub, "$(OUT):_UNIT_SETTER")
+{
+    field(DESC, "Gets units based on calibration file")
+
+    field(SNAM, "get_units")
+	
+    field(INPA, "$(DIR).BDIR CP")
+    field(FTA, "STRING")
+	
+	field(INPB, "$(DIR).TDIR CP")
+	field(FTB, "STRING")
+	
+    field(INPC, "$(CAL) CP")
+    field(FTC, "STRING")
+      
+    field(OUTA, "$(OUT).EGU")
+    field(FTVA, "STRING")
+}

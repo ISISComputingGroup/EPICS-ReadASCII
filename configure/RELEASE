@@ -1,10 +1,20 @@
 # START OF AUTO GENERATED DEPENDENCIES
+ASUBFUNCTIONS=$(SUPPORT)/asubFunctions/master
 ASYN=$(SUPPORT)/asyn/master
-ONCRPC=$(SUPPORT)/oncrpc/master
+CSM=$(SUPPORT)/csm/master
+ACCESSSECURITY=$(SUPPORT)/AccessSecurity/master
+ASUBFUNCTIONS=$(SUPPORT)/asubFunctions/master
+ASYN=$(SUPPORT)/asyn/master
 AUTOSAVE=$(SUPPORT)/autosave/master
+CALC=$(SUPPORT)/calc/master
 CAPUTLOG=$(SUPPORT)/caPutLog/master
+COMMON=$(ISISSUPPORT)/Common/master
 DEVIOCSTATS=$(SUPPORT)/devIocStats/master
+EFSW=$(SUPPORT)/efsw/master
+FILELIST=$(SUPPORT)/FileList/master
 ICPCONFIG=$(SUPPORT)/icpconfig/master
+LIBJSON=$(SUPPORT)/libjson/master
+ONCRPC=$(SUPPORT)/oncrpc/master
 MYSQL=$(SUPPORT)/MySQL/master
 PCRE=$(SUPPORT)/pcre/master
 PUGIXML=$(SUPPORT)/pugixml/master
@@ -12,7 +22,9 @@ PVDUMP=$(SUPPORT)/pvdump/master
 SNCSEQ=$(SUPPORT)/seq/master
 SQLITE=$(SUPPORT)/sqlite/master
 SSCAN=$(SUPPORT)/sscan/master
+STREAMDEVICE=$(SUPPORT)/StreamDevice/master
 UTILITIES=$(SUPPORT)/utilities/master
+ZLIB=$(SUPPORT)/zlib/master
 # END OF AUTO GENERATED DEPENDENCIES
 
 # optional extra local definitions here

@@ -16,10 +16,11 @@ LIBRARY_IOC += ReadASCII
 DBD += ReadASCII.dbd
 
 # specify all source files to be compiled and added to the library
-ReadASCII_SRCS += ReadASCII.cpp
+ReadASCII_SRCS += ReadASCII.cpp get_units_impl.cpp get_units.c
 
-ReadASCII_LIBS += asyn
 ReadASCII_LIBS += $(EPICS_BASE_IOC_LIBS)
+ReadASCII_LIBS += asyn utilities
+ReadASCII_LIBS += asubFunctions
 ReadASCII_SYS_LIBS_WIN32 += ws2_32
 
 #===========================
