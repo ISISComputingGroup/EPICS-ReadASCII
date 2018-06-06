@@ -17,7 +17,7 @@
 #include <string>
 #include <boost/property_tree/json_parser.hpp>
 
-#include "get_units.h"
+#include "get_metadata.h"
 
 
 std::string get_property_value_from_json(std::string json, std::string property_name) {
@@ -34,7 +34,7 @@ std::string get_property_value_from_json(std::string json, std::string property_
 /**
  * Gets the metadata of a file from that file.
  */
-std::string get_units_from_file(std::string filepath, std::string property_name, std::string property_default) 
+std::string get_metadata_from_file(std::string filepath, std::string property_name, std::string property_default) 
 {
     std::string comment_prefix = "#";
     std::string file_format = "ISIS calibration v1.0";
@@ -101,9 +101,9 @@ std::string str_from_epics(void* raw_rec)
 
 
 /**
- * Extracts data from the aSub record, gets the units of the file and puts the units back into the record.
+ * Extracts data from the aSub record, gets the named metadata of the file and puts the metadata value back into the record.
  */
-int get_units_impl(aSubRecord *prec)
+int get_metadata_impl(aSubRecord *prec)
 {
     std::string base_dir = str_from_epics(prec->a);
     std::string sensor_dir = str_from_epics(prec->b);
@@ -111,13 +111,8 @@ int get_units_impl(aSubRecord *prec)
     std::string property_name = str_from_epics(prec->d);
     std::string property_default = str_from_epics(prec->e);
     
-    printf("name: %s\n", property_name.c_str());
-    printf("default: %s\n", property_default.c_str());
+    std::string value = get_metadata_from_file(base_dir + "/" + sensor_dir + "/" + sensor_file, property_name, property_default);
     
-    std::string units = get_units_from_file(base_dir + "/" + sensor_dir + "/" + sensor_file, property_name, property_default);
-    
-    printf("units: %s\n", units.c_str());
-    
-    strcpy(*reinterpret_cast<epicsOldString*>(prec->vala), units.c_str());
+    strcpy(*reinterpret_cast<epicsOldString*>(prec->vala), value.c_str());
     return 0;
 }

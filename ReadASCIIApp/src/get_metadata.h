@@ -2,7 +2,7 @@
 extern "C" {
 #endif
 
-extern int get_units_impl(aSubRecord *prec);
+extern int get_metadata_impl(aSubRecord *prec);
 
 #ifdef __cplusplus
 }
