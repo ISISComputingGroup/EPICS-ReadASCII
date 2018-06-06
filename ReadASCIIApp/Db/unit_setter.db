@@ -5,20 +5,41 @@
 # OUT - the PV to write the units to.
 #
 
-record(aSub, "$(OUT):_UNIT_SETTER")
+record(stringin, "$(OUT):_UNITS:NAME") {
+    field("VAL", "units")
+    field("PINI", "YES")
+}
+
+record(stringin, "$(OUT):_UNITS:DEFAULT") {
+    field("VAL", "K")
+    field("PINI", "YES")
+}
+
+record(aSub, "$(OUT):_UNITS")
 {
     field(DESC, "Gets units based on calibration file")
 
     field(SNAM, "get_units")
 	
+    # Base dir
     field(INPA, "$(DIR).BDIR CP")
     field(FTA, "STRING")
 	
+    # Sensor dir
 	field(INPB, "$(DIR).TDIR CP")
 	field(FTB, "STRING")
 	
+    # Sensor file
     field(INPC, "$(CAL) CP")
     field(FTC, "STRING")
+	
+    # Property name to read from JSON
+    field(INPD, "$(OUT):_UNITS:NAME CP")
+    field(FTD, "STRING")
+	
+    # Default value
+    field(INPE, "$(OUT):_UNITS:DEFAULT CP")
+    field(FTE, "STRING")
       
     field(OUTA, "$(OUT).EGU")
     field(FTVA, "STRING")

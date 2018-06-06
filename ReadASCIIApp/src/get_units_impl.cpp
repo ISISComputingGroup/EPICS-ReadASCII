@@ -6,41 +6,85 @@
 #include <errlog.h>
 #include <epicsString.h>
 #include <epicsExport.h>
+#include <libjson.h>
 #include <string>
 #include <vector>
+#include <deque>
 #include <sstream>
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <boost/property_tree/json_parser.hpp>
 
 #include "get_units.h"
 
 
+std::string get_property_value_from_json(std::string json, std::string property_name) {
+    
+    std::stringstream ss;
+    ss << json;
+    
+    boost::property_tree::ptree pt;
+    boost::property_tree::read_json(ss, pt);
+    return pt.get<std::string>(property_name);
+}
+
+
 /**
- * Gets the units of a file from that file.
+ * Gets the metadata of a file from that file.
  */
-std::string get_units_from_file(std::string filepath) 
+std::string get_units_from_file(std::string filepath, std::string property_name, std::string property_default) 
 {
-    std::string units_prefix = "# units:";
-    std::string default_units = "K";
-    std::string units = default_units;
+    std::string comment_prefix = "#";
+    std::string file_format = "ISIS calibration v1.0";
+    
+    std::deque<std::string> all_lines;
     
     std::ifstream infile(filepath);
     std::string line;
+    
     while (std::getline(infile, line))
     {
         try {
             // Ideally would use line.starts_with but that's only in C++20
-            if (line.substr(0, units_prefix.size()) == units_prefix) {
-                units = line.substr(units_prefix.size(), line.size());
+            if (line.substr(0, comment_prefix.size()) == comment_prefix) {
+                all_lines.push_back(line.substr(comment_prefix.size(), line.size()));
             }
         } catch (std::out_of_range) {
-            // Out of range error thrown if line is shorter than len(units_prefix)
+            // Out of range error thrown if line is shorter than len(comment_prefix)
             // Ignore this case
         }
     }
-    return units;
+    
+    if (all_lines.size() == 0) {
+        // No commented block in file.
+        return property_default;
+    }
+    
+    std::string header_line = all_lines.front();
+    all_lines.pop_front();
+    
+    if (header_line.find(file_format) == std::string::npos) {
+        // Header didn't contain our expected magic bytes - refuse to parse.
+        return property_default;
+    }
+    
+    if (all_lines.size() == 0) {
+        // Commented block and magic bytes existed, but no other lines.
+        return property_default;
+    }
+    
+    std::string all_lines_s = "";
+    for (auto const& value: all_lines) {
+        all_lines_s += value;
+    }
+    
+    try {
+        return get_property_value_from_json(all_lines_s, property_name);
+    } catch (std::exception) {
+        return property_default;
+    }
 }
 
 
@@ -64,8 +108,15 @@ int get_units_impl(aSubRecord *prec)
     std::string base_dir = str_from_epics(prec->a);
     std::string sensor_dir = str_from_epics(prec->b);
     std::string sensor_file = str_from_epics(prec->c);
+    std::string property_name = str_from_epics(prec->d);
+    std::string property_default = str_from_epics(prec->e);
     
-    std::string units = get_units_from_file(base_dir + "/" + sensor_dir + "/" + sensor_file);
+    printf("name: %s\n", property_name.c_str());
+    printf("default: %s\n", property_default.c_str());
+    
+    std::string units = get_units_from_file(base_dir + "/" + sensor_dir + "/" + sensor_file, property_name, property_default);
+    
+    printf("units: %s\n", units.c_str());
     
     strcpy(*reinterpret_cast<epicsOldString*>(prec->vala), units.c_str());
     return 0;

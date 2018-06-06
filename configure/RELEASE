@@ -1,6 +1,7 @@
 # START OF AUTO GENERATED DEPENDENCIES
 ASUBFUNCTIONS=$(SUPPORT)/asubFunctions/master
 ASYN=$(SUPPORT)/asyn/master
+BOOST=$(EPICS_ROOT)/libraries/master/boost
 CSM=$(SUPPORT)/csm/master
 ACCESSSECURITY=$(SUPPORT)/AccessSecurity/master
 ASUBFUNCTIONS=$(SUPPORT)/asubFunctions/master
