@@ -20,6 +20,9 @@
 #include "get_metadata.h"
 
 
+/**
+ * Gets a property's value by name from JSON.
+ */
 std::string get_property_value_from_json(std::string json, std::string property_name) {
     
     std::stringstream ss;
@@ -58,7 +61,7 @@ std::string get_metadata_from_file(std::string filepath, std::string property_na
     }
     
     if (all_lines.size() == 0) {
-        // No commented block in file.
+        // No commented block in file, return default.
         return property_default;
     }
     
@@ -66,12 +69,13 @@ std::string get_metadata_from_file(std::string filepath, std::string property_na
     all_lines.pop_front();
     
     if (header_line.find(file_format) == std::string::npos) {
-        // Header didn't contain our expected magic bytes - refuse to parse.
+        // Header didn't contain our expected magic bytes - refuse to parse (might not be our format).
         return property_default;
     }
     
     if (all_lines.size() == 0) {
         // Commented block and magic bytes existed, but no other lines.
+        std::cerr << "get_metadata: magic bytes existed but no JSON." << std::endl;
         return property_default;
     }
     
@@ -83,7 +87,7 @@ std::string get_metadata_from_file(std::string filepath, std::string property_na
     try {
         return get_property_value_from_json(all_lines_s, property_name);
     } catch (std::exception &e) {
-        std::cout "Error parsing JSON: " << e.what() << std::endl;
+        std::cerr << "get_metadata: Error parsing JSON: " << e.what() << std::endl;
         return property_default;
     }
 }
