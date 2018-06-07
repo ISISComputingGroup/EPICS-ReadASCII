@@ -37,7 +37,7 @@ std::string get_property_value_from_json(std::string json, std::string property_
 std::string get_metadata_from_file(std::string filepath, std::string property_name, std::string property_default) 
 {
     std::string comment_prefix = "#";
-    std::string file_format = "ISIS calibration v1.0";
+    std::string file_format = "ISIS calibration";
     
     std::deque<std::string> all_lines;
     
@@ -82,7 +82,8 @@ std::string get_metadata_from_file(std::string filepath, std::string property_na
     
     try {
         return get_property_value_from_json(all_lines_s, property_name);
-    } catch (std::exception) {
+    } catch (std::exception &e) {
+        std::cout "Error parsing JSON: " << e.what() << std::endl;
         return property_default;
     }
 }
