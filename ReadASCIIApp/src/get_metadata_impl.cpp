@@ -18,6 +18,7 @@
 #include <boost/property_tree/json_parser.hpp>
 
 #include "get_metadata.h"
+#include "errlog.h"
 
 
 /**
@@ -75,7 +76,7 @@ std::string get_metadata_from_file(std::string filepath, std::string property_na
     
     if (all_lines.size() == 0) {
         // Commented block and magic bytes existed, but no other lines.
-        std::cerr << "get_metadata: magic bytes existed but no JSON." << std::endl;
+        errlogPrintf("get_metadata: magic bytes existed but no JSON.\n");
         return property_default;
     }
     
@@ -85,9 +86,15 @@ std::string get_metadata_from_file(std::string filepath, std::string property_na
     }
     
     try {
+        std::string version_s = get_property_value_from_json(all_lines_s, "format_version");
+        std::string::size_type sz;
+        float version_f = std::stof(version_s, &sz);
+        if(version_f > 1.0) {
+            errlogPrintf("get_metadata: warning: calibration file format is newer than 1.0. Attempting to parse anyway.\n");
+        }
         return get_property_value_from_json(all_lines_s, property_name);
     } catch (std::exception &e) {
-        std::cerr << "get_metadata: Error parsing JSON: " << e.what() << std::endl;
+        errlogPrintf("get_metadata: Error parsing JSON: %s\n", e.what());
         return property_default;
     }
 }
