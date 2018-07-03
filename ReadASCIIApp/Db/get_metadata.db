@@ -1,0 +1,49 @@
+#
+# Macros:
+# DIR - the pv name of a record that does conversions
+# CAL - the calibration file readback PV
+# OUT - the PV to write the metadata to.
+# OUTF - the PV field to write the metadata to (defaults to VAL)
+# NAME - the name in the json of the piece of metadata to extract
+# DEFAULT - if metadata could not be extracted or was not present
+#
+
+record(stringin, "$(OUT):$(OUTF=VAL):_META:NAM") {
+    field("VAL", "$(NAME)")
+    field("PINI", "YES")
+}
+
+record(stringin, "$(OUT):$(OUTF=VAL):_META:DEF") {
+    field("VAL", "$(DEFAULT)")
+    field("PINI", "YES")
+}
+
+record(aSub, "$(OUT):_UNITS")
+{
+    field(DESC, "Gets units based on calibration file")
+
+    field(SNAM, "get_metadata")
+	
+    # Base dir
+    field(INPA, "$(DIR).BDIR CP")
+    field(FTA, "STRING")
+	
+    # Sensor dir
+	field(INPB, "$(DIR).TDIR CP")
+	field(FTB, "STRING")
+	
+    # Sensor file
+    field(INPC, "$(CAL) CP")
+    field(FTC, "STRING")
+	
+    # Property name to read from JSON
+    field(INPD, "$(OUT):$(OUTF=VAL):_META:NAM CP")
+    field(FTD, "STRING")
+	
+    # Default value
+    field(INPE, "$(OUT):$(OUTF=VAL):_META:DEF CP")
+    field(FTE, "STRING")
+      
+    field(OUTA, "$(OUT).$(OUTF=VAL)")
+    field(FTVA, "STRING")
+}
