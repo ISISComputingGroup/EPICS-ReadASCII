@@ -16,6 +16,7 @@
 #include <sstream>
 #include <string>
 #include <boost/property_tree/json_parser.hpp>
+#include <boost/foreach.hpp>
 
 #include "get_metadata.h"
 #include "errlog.h"
@@ -81,7 +82,8 @@ std::string get_metadata_from_file(std::string filepath, std::string property_na
     }
     
     std::string all_lines_s = "";
-    for (const std::string& value: all_lines) {
+    std::string value;
+    BOOST_FOREACH(value, all_lines) {
         all_lines_s += value;
     }
     
