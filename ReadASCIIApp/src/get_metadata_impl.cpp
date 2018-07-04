@@ -81,7 +81,7 @@ std::string get_metadata_from_file(std::string filepath, std::string property_na
     }
     
     std::string all_lines_s = "";
-    for (auto const& value: all_lines) {
+    for (const std::string& value: all_lines) {
         all_lines_s += value;
     }
     
