@@ -120,11 +120,11 @@ int get_calib_metadata_impl(aSubRecord *prec)
 {
     
     bool types_valid = prec->fta == menuFtypeSTRING;
-    types_valid |= prec->ftb == menuFtypeSTRING;
-    types_valid |= prec->ftc == menuFtypeSTRING;
-    types_valid |= prec->ftd == menuFtypeSTRING;
-    types_valid |= prec->fte == menuFtypeSTRING;
-    types_valid |= prec->ftva == menuFtypeSTRING;
+    types_valid = types_valid && prec->ftb == menuFtypeSTRING;
+    types_valid = types_valid && prec->ftc == menuFtypeSTRING;
+    types_valid = types_valid && prec->ftd == menuFtypeSTRING;
+    types_valid = types_valid && prec->fte == menuFtypeSTRING;
+    types_valid = types_valid && prec->ftva == menuFtypeSTRING;
     
     if(!types_valid) {
         // Error condition - aSub record didn't have expected types.
