@@ -16,7 +16,7 @@ LIBRARY_IOC += ReadASCII
 DBD += ReadASCII.dbd
 
 # specify all source files to be compiled and added to the library
-ReadASCII_SRCS += ReadASCII.cpp get_metadata_impl.cpp get_metadata.c
+ReadASCII_SRCS += ReadASCII.cpp get_calib_metadata_impl.cpp get_calib_metadata.c
 
 ReadASCII_LIBS += $(EPICS_BASE_IOC_LIBS)
 ReadASCII_LIBS += asyn utilities

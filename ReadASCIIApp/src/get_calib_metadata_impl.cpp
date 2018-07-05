@@ -18,7 +18,7 @@
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/foreach.hpp>
 
-#include "get_metadata.h"
+#include "get_calib_metadata.h"
 #include "errlog.h"
 
 
@@ -94,7 +94,7 @@ std::string get_metadata_from_file(const std::string& filepath, const std::strin
             errlogPrintf("get_metadata: warning: calibration file format is newer than 1.0. Attempting to parse anyway.\n");
         }
         return get_property_value_from_json(comment_lines_s, property_name);
-    } catch (std::exception &e) {
+    } catch (const std::exception &e) {
         errlogPrintf("get_metadata: Error parsing JSON: %s\n", e.what());
         return property_default;
     }
@@ -116,7 +116,7 @@ std::string str_from_epics(void* raw_rec)
 /**
  * Extracts data from the aSub record, gets the named metadata of the file and puts the metadata value back into the record.
  */
-int get_metadata_impl(aSubRecord *prec)
+int get_calib_metadata_impl(aSubRecord *prec)
 {
     std::string base_dir = str_from_epics(prec->a);
     std::string sensor_dir = str_from_epics(prec->b);
