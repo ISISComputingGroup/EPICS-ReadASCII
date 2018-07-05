@@ -77,7 +77,7 @@ std::string get_metadata_from_file(const std::string& filepath, const std::strin
     
     if (comment_lines.size() == 0) {
         // Commented block and magic bytes existed, but no other lines.
-        errlogPrintf("get_metadata: magic bytes existed but no JSON.\n");
+        errlogPrintf("get_calib_metadata: magic bytes existed but no JSON.\n");
         return property_default;
     }
     
@@ -91,11 +91,11 @@ std::string get_metadata_from_file(const std::string& filepath, const std::strin
         std::string::size_type sz;
         float version_f = std::stof(version_s, &sz);
         if(version_f > 1.0) {
-            errlogPrintf("get_metadata: warning: calibration file format is newer than 1.0. Attempting to parse anyway.\n");
+            errlogPrintf("get_calib_metadata: warning: calibration file format is newer than 1.0. Attempting to parse anyway.\n");
         }
         return get_property_value_from_json(comment_lines_s, property_name);
     } catch (const std::exception &e) {
-        errlogPrintf("get_metadata: Error parsing JSON: %s\n", e.what());
+        errlogPrintf("get_calib_metadata: Error parsing JSON: %s\n", e.what());
         return property_default;
     }
 }
@@ -118,6 +118,21 @@ std::string str_from_epics(void* raw_rec)
  */
 int get_calib_metadata_impl(aSubRecord *prec)
 {
+    
+    bool types_valid = prec->fta == menuFtypeSTRING;
+    types_valid |= prec->ftb == menuFtypeSTRING;
+    types_valid |= prec->ftc == menuFtypeSTRING;
+    types_valid |= prec->ftd == menuFtypeSTRING;
+    types_valid |= prec->fte == menuFtypeSTRING;
+    types_valid |= prec->ftva == menuFtypeSTRING;
+    
+    if(!types_valid) {
+        // Error condition - aSub record didn't have expected types.
+        // Return 1 signifies the error to epics
+        errlogPrintf("get_calib_metadata: Field types were invalid\n");
+        return 1;
+    }
+    
     std::string base_dir = str_from_epics(prec->a);
     std::string sensor_dir = str_from_epics(prec->b);
     std::string sensor_file = str_from_epics(prec->c);
