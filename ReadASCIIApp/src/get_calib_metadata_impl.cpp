@@ -42,13 +42,19 @@ std::string get_property_value_from_json(const std::string& json, const std::str
 std::string get_metadata_from_file(const std::string& filepath, const std::string& property_name, const std::string& property_default) 
 {
     std::string comment_prefix = "#";
-    std::string file_format = "ISIS calibration";
-    
-    std::deque<std::string> comment_lines;
+    std::string file_format = comment_prefix + " ISIS calibration";
     
     std::ifstream infile(filepath);
-    std::string line;
     
+    std::string firstLine;
+    if (!std::getline(infile, firstLine) || firstLine.size() < file_format.size() || firstLine.substr(0, file_format.size()) != firstLine) {
+        // Not our format - don't parse
+        return property_default;
+    }
+    
+    
+    std::deque<std::string> comment_lines;
+    std::string line;
     while (std::getline(infile, line))
     {
         try {
@@ -63,20 +69,7 @@ std::string get_metadata_from_file(const std::string& filepath, const std::strin
     }
     
     if (comment_lines.size() == 0) {
-        // No commented block in file, return default.
-        return property_default;
-    }
-    
-    std::string header_line = comment_lines.front();
-    comment_lines.pop_front();
-    
-    if (header_line.find(file_format) == std::string::npos) {
-        // Header didn't contain our expected magic bytes - refuse to parse (might not be our format).
-        return property_default;
-    }
-    
-    if (comment_lines.size() == 0) {
-        // Commented block and magic bytes existed, but no other lines.
+        // Magic bytes existed, but no other lines.
         errlogPrintf("get_calib_metadata: magic bytes existed but no JSON.\n");
         return property_default;
     }
