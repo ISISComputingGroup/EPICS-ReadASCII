@@ -25,7 +25,7 @@
 /**
  * Gets a property's value by name from JSON.
  */
-std::string get_property_value_from_json(std::string json, std::string property_name) {
+std::string get_property_value_from_json(const std::string& json, const std::string& property_name) {
     
     std::stringstream ss;
     ss << json;
@@ -39,12 +39,12 @@ std::string get_property_value_from_json(std::string json, std::string property_
 /**
  * Gets the metadata of a file from that file.
  */
-std::string get_metadata_from_file(std::string filepath, std::string property_name, std::string property_default) 
+std::string get_metadata_from_file(const std::string& filepath, const std::string& property_name, const std::string& property_default) 
 {
     std::string comment_prefix = "#";
     std::string file_format = "ISIS calibration";
     
-    std::deque<std::string> all_lines;
+    std::deque<std::string> comment_lines;
     
     std::ifstream infile(filepath);
     std::string line;
@@ -54,7 +54,7 @@ std::string get_metadata_from_file(std::string filepath, std::string property_na
         try {
             // Ideally would use line.starts_with but that's only in C++20
             if (line.substr(0, comment_prefix.size()) == comment_prefix) {
-                all_lines.push_back(line.substr(comment_prefix.size(), line.size()));
+                comment_lines.push_back(line.substr(comment_prefix.size(), line.size()));
             }
         } catch (std::out_of_range) {
             // Out of range error thrown if line is shorter than len(comment_prefix)
@@ -62,39 +62,38 @@ std::string get_metadata_from_file(std::string filepath, std::string property_na
         }
     }
     
-    if (all_lines.size() == 0) {
+    if (comment_lines.size() == 0) {
         // No commented block in file, return default.
         return property_default;
     }
     
-    std::string header_line = all_lines.front();
-    all_lines.pop_front();
+    std::string header_line = comment_lines.front();
+    comment_lines.pop_front();
     
     if (header_line.find(file_format) == std::string::npos) {
         // Header didn't contain our expected magic bytes - refuse to parse (might not be our format).
         return property_default;
     }
     
-    if (all_lines.size() == 0) {
+    if (comment_lines.size() == 0) {
         // Commented block and magic bytes existed, but no other lines.
         errlogPrintf("get_metadata: magic bytes existed but no JSON.\n");
         return property_default;
     }
     
-    std::string all_lines_s = "";
-    std::string value;
-    BOOST_FOREACH(value, all_lines) {
-        all_lines_s += value;
+    std::string comment_lines_s = "";
+    BOOST_FOREACH(std::string value, comment_lines) {
+        comment_lines_s += value;
     }
     
     try {
-        std::string version_s = get_property_value_from_json(all_lines_s, "format_version");
+        std::string version_s = get_property_value_from_json(comment_lines_s, "format_version");
         std::string::size_type sz;
         float version_f = std::stof(version_s, &sz);
         if(version_f > 1.0) {
             errlogPrintf("get_metadata: warning: calibration file format is newer than 1.0. Attempting to parse anyway.\n");
         }
-        return get_property_value_from_json(all_lines_s, property_name);
+        return get_property_value_from_json(comment_lines_s, property_name);
     } catch (std::exception &e) {
         errlogPrintf("get_metadata: Error parsing JSON: %s\n", e.what());
         return property_default;
@@ -127,6 +126,6 @@ int get_metadata_impl(aSubRecord *prec)
     
     std::string value = get_metadata_from_file(base_dir + "/" + sensor_dir + "/" + sensor_file, property_name, property_default);
     
-    strcpy(*reinterpret_cast<epicsOldString*>(prec->vala), value.c_str());
+    strncpy(*reinterpret_cast<epicsOldString*>(prec->vala), value.c_str(), std::min(sizeof(epicsOldString), value.size()+1));
     return 0;
 }
