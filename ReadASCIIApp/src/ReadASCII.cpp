@@ -645,7 +645,7 @@ asynStatus ReadASCII::readFile(const char *dir)
 	}
 	else {
 		//send a file not found error
-		std::cerr << "ReadASCII: File Open Failed: " << dir << std::endl;
+		std::cerr << "ReadASCII: File Open Failed: " << dir << ": " << strerror(errno) << std::endl;
 		fileBad = true;
 		return asynError;
 	}	
