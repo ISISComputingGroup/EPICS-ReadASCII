@@ -16,7 +16,7 @@
 #include <sstream>
 #include <string>
 #include <boost/property_tree/json_parser.hpp>
-#include <boost/foreach.hpp>
+#include <boost/algorithm/string/join.hpp>
 
 #include "get_calib_metadata.h"
 #include "errlog.h"
@@ -73,11 +73,7 @@ std::string get_metadata_from_file(const std::string& filepath, const std::strin
         errlogPrintf("get_calib_metadata: magic bytes existed but no JSON.\n");
         return property_default;
     }
-    
-    std::string comment_lines_s = "";
-    BOOST_FOREACH(std::string value, comment_lines) {
-        comment_lines_s += value;
-    }
+    std::string comment_lines_s = boost::join(comment_lines, "");
     
     try {
         std::string version_s = get_property_value_from_json(comment_lines_s, "format_version");
