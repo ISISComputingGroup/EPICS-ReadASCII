@@ -22,7 +22,7 @@ record(aSub, "$(OUT):_UNITS")
 {
     field(DESC, "Gets units based on calibration file")
 
-    field(SNAM, "get_metadata")
+    field(SNAM, "get_calib_metadata")
 	
     # Base dir
     field(INPA, "$(DIR).BDIR CP")
