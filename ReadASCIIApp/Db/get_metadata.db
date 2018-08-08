@@ -4,6 +4,7 @@
 # CAL - the calibration file readback PV
 # OUT - the PV to write the metadata to.
 # OUTF - the PV field to write the metadata to (defaults to VAL)
+# OUTPP -  NP by default, eurotherm needs PP for corect units 
 # NAME - the name in the json of the piece of metadata to extract
 # DEFAULT - if metadata could not be extracted or was not present
 #
@@ -44,6 +45,6 @@ record(aSub, "$(OUT):_UNITS")
     field(INPE, "$(OUT):$(OUTF=VAL):_META:DEF CP")
     field(FTE, "STRING")
       
-    field(OUTA, "$(OUT).$(OUTF=VAL)")
+    field(OUTA, "$(OUT).$(OUTF=VAL) $(OUTPP=NP)")
     field(FTVA, "STRING")
 }
