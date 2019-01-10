@@ -24,7 +24,7 @@
 /**
  * Gets a property's value by name from JSON.
  */
-std::string get_property_value_from_json(const std::string& json, const std::string& property_name) {
+static std::string get_property_value_from_json(const std::string& json, const std::string& property_name) {
     
     std::stringstream ss;
     ss << json;
@@ -38,7 +38,7 @@ std::string get_property_value_from_json(const std::string& json, const std::str
 /**
  * Gets the metadata of a file from that file.
  */
-std::string get_metadata_from_file(const std::string& filepath, const std::string& property_name, const std::string& property_default) 
+static std::string get_metadata_from_file(const std::string& filepath, const std::string& property_name, const std::string& property_default) 
 {
     std::string comment_prefix = "#";
     std::string file_format = comment_prefix + " ISIS calibration";
@@ -92,7 +92,7 @@ std::string get_metadata_from_file(const std::string& filepath, const std::strin
 /**
  * Extracts a std::string from an epics aSubRecord.
  */
-std::string str_from_epics(void* raw_rec)
+static std::string str_from_epics(void* raw_rec)
 {
     epicsOldString* rec = reinterpret_cast<epicsOldString*>(raw_rec);
     char buffer[sizeof(epicsOldString)+1];  // +1 for null terminator in the case where epics str is exactly 40 chars (unterminated)
