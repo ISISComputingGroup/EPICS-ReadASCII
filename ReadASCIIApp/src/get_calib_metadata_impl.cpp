@@ -5,7 +5,6 @@
 #include <menuFtype.h>
 #include <errlog.h>
 #include <epicsString.h>
-#include <epicsExport.h>
 #include <libjson.h>
 #include <string>
 #include <vector>
