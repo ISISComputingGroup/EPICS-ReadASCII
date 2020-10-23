@@ -41,6 +41,7 @@ protected:
 	int P_LookUpOn; //int
 
 	int P_RampRate; //float
+    int P_StepsPerMin; //float
 	int P_CurTemp; //float
 	int P_Target; //float
 	int P_SPOut; //float
@@ -94,6 +95,7 @@ private:
 #define P_TargetString "TGT"
 #define P_SPRBVString "TGT:RBV"
 #define P_RampRateString "RATE"
+#define P_StepsPerMinString "STPNUM"
 #define P_CurTempString "CUR"
 
 #define P_SPOutString "SP"

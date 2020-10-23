@@ -67,6 +67,7 @@ ReadASCII::ReadASCII(const char *portName, const char *searchDir)
 	createParam(P_TargetString, asynParamFloat64, &P_Target);
 	createParam(P_SPRBVString, asynParamFloat64, &P_SPRBV);
 	createParam(P_RampRateString, asynParamFloat64, &P_RampRate);
+    createParam(P_StepsPerMinString, asynParamFloat64, &P_StepsPerMin);
 	createParam(P_CurTempString, asynParamFloat64, &P_CurTemp);
 
 	createParam(P_SPOutString, asynParamFloat64, &P_SPOut);
@@ -87,6 +88,7 @@ ReadASCII::ReadASCII(const char *portName, const char *searchDir)
 	setStringParam(P_DirBase, searchDir);
 
 	setDoubleParam(P_RampRate, 1.0);
+    setDoubleParam(P_StepsPerMin, 20.0);
 	setIntegerParam(P_Ramping, 0);
 	setIntegerParam(P_RampOn, 0);
 	setIntegerParam(P_LookUpOn, 0);
@@ -383,7 +385,7 @@ void ReadASCII::rampThread(void)
 {
     const double SECONDS_IN_MINUTE = 60.0;
 	//Ramps SP values when the ramp is on
-	double wait, rate, target, curSP, newSP, SPRBV;
+	double wait, rate, target, curSP, newSP, SPRBV, stepsPerMin;
 	int ramping, rampOn, lookUpOn;
 
 	lock();
@@ -418,6 +420,9 @@ void ReadASCII::rampThread(void)
 		//get target
 		getDoubleParam(P_Target, &target);
 
+        //get steps per minute
+        getDoubleParam(P_StepsPerMin, &stepsPerMin);
+
 		if ((abs(SPRBV - target) < EPSILON) && (abs(curSP - target) < EPSILON))
 		{
 			setIntegerParam(P_Ramping, 0);
@@ -425,18 +430,16 @@ void ReadASCII::rampThread(void)
 			continue;
 		}
 
+        if (P_StepsPerMin < EPSILON) {
+            wait = 5.0; //default wait
+        } else {
+            wait = SECONDS_IN_MINUTE/stepsPerMin;
+        }
+
 		unlock(); 
-		wait = 5.0; //default wait
 
 		//wait
 		epicsEventWaitWithTimeout(eventId_, wait);
-
-		//check near final SP (Doesn't work as requires long time to write to Eurotherm) 
-		//if (diff < (wait * rate))
-		//{
-		//	//wait less time
-		//	wait = diff / rate;
-		//}
 		
 		lock();
 
