@@ -12,7 +12,7 @@
 class ReadASCII : public asynPortDriver 
 {
 public:
-    ReadASCII(const char* portName, const char *searchDir);
+    ReadASCII(const char* portName, const char *searchDir, const int stepsPerMinute);
 
 
     virtual asynStatus writeOctet(asynUser *pasynUser, const char *value, size_t maxChars, size_t *nActual);

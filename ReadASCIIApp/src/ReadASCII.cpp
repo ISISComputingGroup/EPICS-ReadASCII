@@ -34,7 +34,7 @@ void rampThread(void *drvPvt);
 
 /// Constructor for the ReadASCII class.
 /// Calls constructor for the asynPortDriver base class.
-ReadASCII::ReadASCII(const char *portName, const char *searchDir)
+ReadASCII::ReadASCII(const char *portName, const char *searchDir, const int stepsPerMinute)
    : asynPortDriver(portName, 
                     0, /* maxAddr */ 
                     NUM_READASCII_PARAMS,
@@ -88,7 +88,7 @@ ReadASCII::ReadASCII(const char *portName, const char *searchDir)
     setStringParam(P_DirBase, searchDir);
 
     setDoubleParam(P_RampRate, 1.0);
-    setDoubleParam(P_StepsPerMin, 20.0);
+    setDoubleParam(P_StepsPerMin, stepsPerMinute);
     setIntegerParam(P_Ramping, 0);
     setIntegerParam(P_RampOn, 0);
     setIntegerParam(P_LookUpOn, 0);
@@ -705,12 +705,13 @@ extern "C" {
 
 /// EPICS iocsh callable function to call constructor of ReadASCII().
 /// \param[in] portName @copydoc initArg0
-/// \param[in] rampDir @copydoc initArg0
-int ReadASCIIConfigure(const char *portName, const char *rampDir)
+/// \param[in] rampDir @copydoc initArg1
+/// \param[in] stepsPerMinute @copydoc initArg2
+int ReadASCIIConfigure(const char *portName, const char *rampDir, const int stepsPerMinute)
 {
     try
     {
-        new ReadASCII(portName, rampDir);
+        new ReadASCII(portName, rampDir, stepsPerMinute);
         return(asynSuccess);
     }
     catch(const std::exception& ex)
@@ -722,16 +723,17 @@ int ReadASCIIConfigure(const char *portName, const char *rampDir)
 
 // EPICS iocsh shell commands 
 
-static const iocshArg initArg0 = { "portName", iocshArgString};			///< The name of the asyn driver port we will create
-static const iocshArg initArg1 = { "rampDir",iocshArgString};           ///< Initial ramp dir
+static const iocshArg initArg0 = { "portName", iocshArgString};			 ///< The name of the asyn driver port we will create
+static const iocshArg initArg1 = { "rampDir", iocshArgString};           ///< Initial ramp dir
+static const iocshArg initArg2 = { "stepsPerMinute", iocshArgInt };  ///< Initial steps per minute
 
-static const iocshArg * const initArgs[] = { &initArg0, &initArg1 };
+static const iocshArg * const initArgs[] = { &initArg0, &initArg1, &initArg2 };
 
 static const iocshFuncDef initFuncDef = {"ReadASCIIConfigure", sizeof(initArgs) / sizeof(iocshArg*), initArgs};
 
 static void initCallFunc(const iocshArgBuf *args)
 {
-    ReadASCIIConfigure(args[0].sval, args[1].sval);
+    ReadASCIIConfigure(args[0].sval, args[1].sval, args[2].ival);
 }
 
 static void ReadASCIIRegister(void)
