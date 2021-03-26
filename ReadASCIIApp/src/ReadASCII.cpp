@@ -34,7 +34,7 @@ void rampThread(void *drvPvt);
 
 /// Constructor for the ReadASCII class.
 /// Calls constructor for the asynPortDriver base class.
-ReadASCII::ReadASCII(const char *portName, const char *searchDir, const int stepsPerMinute)
+ReadASCII::ReadASCII(const char *portName, const char *searchDir, const int stepsPerMinute, const bool setQuietOnSetPoint)
    : asynPortDriver(portName, 
                     0, /* maxAddr */ 
                     NUM_READASCII_PARAMS,
@@ -98,6 +98,7 @@ ReadASCII::ReadASCII(const char *portName, const char *searchDir, const int step
     lastModified = 0;
     fileBad = true; //Set so that program doesn't attempt to read file before base dir is set
     rowNum = 0;
+    quietOnSetPoint = setQuietOnSetPoint;
 
     /* Create the thread that watches the file in the background 	*/
     status = (asynStatus)(epicsThreadCreate("ReadASCIIFile",
@@ -222,8 +223,10 @@ asynStatus ReadASCII::writeInt32(asynUser *pasynUser, epicsInt32 value)
                 setDoubleParam(P_I, pI_[value]);
                 setDoubleParam(P_D, pD_[value]);
                 setDoubleParam(P_MaxHeat, pMaxHeat_[value]);
-                std::cerr << "ReadASCII: Setting SP to " << pSP_[value] << std::endl;
-                std::cerr << "ReadASCII: Updating P=" << pP_[value] << " I=" << pI_[value] << " D=" << pD_[value] << " MP=" << pMaxHeat_[value] << std::endl;
+                if (!quietOnSetPoint) {
+                    std::cerr << "ReadASCII: Setting SP to " << pSP_[value] << std::endl;
+                    std::cerr << "ReadASCII: Updating P=" << pP_[value] << " I=" << pI_[value] << " D=" << pD_[value] << " MP=" << pMaxHeat_[value] << std::endl;
+                }
             }
             else
             {
@@ -300,8 +303,9 @@ asynStatus ReadASCII::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
             //get current temperature and set as SP
             getDoubleParam(P_CurTemp, &startTemp);
             setDoubleParam(P_SPOut, startTemp);
-            std::cerr << "ReadASCII: Setting SP to " << startTemp << " and ramping" << std::endl;
-
+            if (!quietOnSetPoint) {
+                std::cerr << "ReadASCII: Setting SP to " << startTemp << " and ramping" << std::endl;
+            }
             //update PIDs
             if (LUTOn)
             {
@@ -318,8 +322,9 @@ asynStatus ReadASCII::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
             //directly output SP
             setDoubleParam(P_SPOut, value);
             setIntegerParam(P_Ramping, 0);
-            std::cerr << "ReadASCII: Setting SP to " << value << " (no ramp)" << std::endl;
-
+            if (!quietOnSetPoint) {
+                std::cerr << "ReadASCII: Setting SP to " << value << " (no ramp)" << std::endl;
+            }
             //update PIDs
             if (LUTOn)
             {
@@ -707,11 +712,12 @@ extern "C" {
 /// \param[in] portName @copydoc initArg0
 /// \param[in] rampDir @copydoc initArg1
 /// \param[in] stepsPerMinute @copydoc initArg2
-int ReadASCIIConfigure(const char *portName, const char *rampDir, const int stepsPerMinute)
+/// \param[in] logOnSetPoint @copydoc initArg3
+int ReadASCIIConfigure(const char *portName, const char *rampDir, const int stepsPerMinute, const bool logOnSetPoint)
 {
     try
     {
-        new ReadASCII(portName, rampDir, stepsPerMinute);
+        new ReadASCII(portName, rampDir, stepsPerMinute, logOnSetPoint);
         return(asynSuccess);
     }
     catch(const std::exception& ex)
@@ -724,16 +730,17 @@ int ReadASCIIConfigure(const char *portName, const char *rampDir, const int step
 // EPICS iocsh shell commands 
 
 static const iocshArg initArg0 = { "portName", iocshArgString};			 ///< The name of the asyn driver port we will create
-static const iocshArg initArg1 = { "rampDir", iocshArgString};           ///< Initial ramp dir
-static const iocshArg initArg2 = { "stepsPerMinute", iocshArgInt };  ///< Initial steps per minute
+static const iocshArg initArg1 = { "PIDDir", iocshArgString};           ///< Initial directory for the PID file
+static const iocshArg initArg2 = { "stepsPerMinute", iocshArgInt };      ///< Initial steps per minute
+static const iocshArg initArg3 = { "quietOnSetPoint", iocshArgInt };     ///< Stop logging on every set point change set to 1 to supress logging (useful if you change the set points very frequently), defaults to 0
 
-static const iocshArg * const initArgs[] = { &initArg0, &initArg1, &initArg2 };
+static const iocshArg * const initArgs[] = { &initArg0, &initArg1, &initArg2, &initArg3 };
 
 static const iocshFuncDef initFuncDef = {"ReadASCIIConfigure", sizeof(initArgs) / sizeof(iocshArg*), initArgs};
 
 static void initCallFunc(const iocshArgBuf *args)
 {
-    ReadASCIIConfigure(args[0].sval, args[1].sval, args[2].ival);
+    ReadASCIIConfigure(args[0].sval, args[1].sval, args[2].ival, (bool)args[3].ival);
 }
 
 static void ReadASCIIRegister(void)
