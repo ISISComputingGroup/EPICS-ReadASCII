@@ -12,7 +12,7 @@
 class ReadASCII : public asynPortDriver 
 {
 public:
-    ReadASCII(const char* portName, const char *searchDir, const int stepsPerMinute);
+    ReadASCII(const char* portName, const char *searchDir, const int stepsPerMinute, const bool logOnSetPoint);
 
 
     virtual asynStatus writeOctet(asynUser *pasynUser, const char *value, size_t maxChars, size_t *nActual);
@@ -71,6 +71,7 @@ private:
     int getSPInd (double SP);
     void updatePID(int index);
     asynStatus readFileBasedOnParameters();
+    bool quietOnSetPoint;
     
 #define FIRST_READASCII_PARAM P_Dir
 #define LAST_READASCII_PARAM P_MaxHeat
