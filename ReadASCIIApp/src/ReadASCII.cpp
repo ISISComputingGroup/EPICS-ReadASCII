@@ -165,13 +165,12 @@ asynStatus ReadASCII::readOctet(asynUser *pasynUser, char *value, size_t maxChar
     /* Fetch the parameter string name for possible use in debugging */
     getParamName(function, &paramName);
 
-    if (function == P_DirBase) {
-        char dirBase[DIR_LENGTH];
-        getStringParam(P_DirBase, DIR_LENGTH, dirBase);
+    if (function == P_DirBase || function == P_Dir) {
+        char temp[DIR_LENGTH];
+        getStringParam(function, DIR_LENGTH, temp);
 
-        strncpy(value, dirBase, maxChars);
-        *nActual = strlen(dirBase);
-        std::cerr << "ReadASCII: new dir base " << dirBase << std::endl;
+        strncpy(value, temp, maxChars);
+        *nActual = strlen(temp);
     } else {
         status = asynError;
         epicsSnprintf(pasynUser->errorMessage, pasynUser->errorMessageSize,
