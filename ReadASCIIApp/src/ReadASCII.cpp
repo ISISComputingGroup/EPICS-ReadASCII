@@ -153,36 +153,6 @@ asynStatus ReadASCII::writeOctet(asynUser *pasynUser, const char *value, size_t 
     return (asynStatus)status;
 }
 
-/// Read Values as Octet
-asynStatus ReadASCII::readOctet(asynUser *pasynUser, char *value, size_t maxChars, size_t *nActual, int *eomReason)
-{
-    //Checks if directory has changed, reads file again if it has
-    int function = pasynUser->reason;
-    asynStatus status = asynSuccess;
-    const char *paramName;
-    const char* functionName = "readOctet";
-
-    /* Fetch the parameter string name for possible use in debugging */
-    getParamName(function, &paramName);
-
-    if (function == P_DirBase) {
-        char dirBase[DIR_LENGTH];
-        getStringParam(P_DirBase, DIR_LENGTH, dirBase);
-
-        strncpy(value, dirBase, maxChars);
-        *nActual = strlen(dirBase);
-        std::cerr << "ReadASCII: new dir base " << dirBase << std::endl;
-    } else {
-        status = asynError;
-        epicsSnprintf(pasynUser->errorMessage, pasynUser->errorMessageSize,
-                "%s:%s: status=%d, function=%d, name=%s function does not have read.",
-                driverName, functionName, status, function, paramName);
-    }
-
-    return status;
-
-}
-
 /// Read the file ramp file based on the parameters in dir and base
 asynStatus ReadASCII::readFileBasedOnParameters() {
 
