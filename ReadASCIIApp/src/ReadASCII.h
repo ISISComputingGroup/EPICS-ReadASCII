@@ -5,6 +5,7 @@
 
 #include "asynPortDriver.h"
 #include <time.h>
+#include <unordered_map>
 
 #define DIR_LENGTH 260
 
@@ -13,7 +14,6 @@ class ReadASCII : public asynPortDriver
 {
 public:
     ReadASCII(const char* portName, const char *searchDir, const int stepsPerMinute, const bool logOnSetPoint);
-
 
     virtual asynStatus writeOctet(asynUser *pasynUser, const char *value, size_t maxChars, size_t *nActual);
     virtual asynStatus writeInt32(asynUser *pasynUser, epicsInt32 value);
@@ -25,15 +25,10 @@ public:
     void rampThread(void);
 
 protected:
+    // these are connected to PVs
     int P_Dir; // string
     int P_DirBase; // string
     int P_Index; //int
-
-    int P_SPArr; //float Array
-    int P_PArr; //float Array
-    int P_IArr; //float Array
-    int P_DArr; //float Array
-    int P_MaxHeatArr; //float Array
 
     int P_Ramping; //int
     int P_RampOn; //int
@@ -43,50 +38,68 @@ protected:
     int P_StepsPerMin; //float
     int P_CurTemp; //float
     int P_Target; //float
-    int P_SPOut; //float
     int P_SPRBV; //float
 
-    int P_P; //float
-    int P_I; //float
-    int P_D; //float
-    int P_MaxHeat; //float
+    int* lastParam = 0;
+
+    // for float64array values. <name, parameter index>
+    std::unordered_map<std::string, int> pv_index_arrays;
+
+    // for single float64 values, will be sent to updatePID. <name, parameter index>
+    std::unordered_map<std::string, int> pv_index_values_updated;
+
+    // first column in settings table, declaring setpoints for updatePID. <name, parameter index>
+    std::pair<std::string, int> config_setpoint_value;
+
+    // holds reference from parameter to settingsTable column
+    std::unordered_map<std::string, std::vector<epicsFloat64>*> pv_data_column_reference;
 
 private:
-    epicsFloat64 *pSP_;
-    epicsFloat64 *pP_;
-    epicsFloat64 *pI_;
-    epicsFloat64 *pD_;
-    epicsFloat64 *pMaxHeat_;
+    // settings values table <column <value>>
+    std::vector<std::vector<epicsFloat64>> settingsTable;
 
     epicsEventId eventId_;
     time_t lastModified;
     char lastDir[DIR_LENGTH];
-    int rowNum;
+    int rowNum; //keeps track of how many rows there are in settingsTable
     bool fileBad; //stops the driver from repeatedly checking bad files
 
     bool isModified(const char *checkDir);
-    asynStatus readFile(const char *dir);
     void checkLookUp (double newSP, double oldSP);
     int getSPInd (double SP);
-    void updatePID(int index);
     asynStatus readFileBasedOnParameters();
+    std::vector<std::string> splitLine(std::string line);
     bool quietOnSetPoint;
+
+    // updates values in control and tuning using settingsTable
+    void updateControlValues(int index);
+
+    // reads the file and updates settingsTable unless headers changed. retry is for situations where file was modified during run
+    asynStatus readFile(const char* dir, bool retry = false);
+
+    // opens lookup file and creates parameters from column headers
+    asynStatus createParams(const char* dir);
+
+    epicsFloat64 getSetpointValue(unsigned int tableRowIndex);
+
+    enum class IndexType
+    {
+        ARRAY, VALUE, SETPOINT
+    };
+    // creates parameter and optionally associates column in settingsTable with data
+    void addParameter(std::string name, asynParamType type, IndexType ind, std::vector<epicsFloat64>* columnReference = 0);
+
+    // will update parameter with it's settingsTable lookup value and return value set
+    epicsFloat64 setParamTableValue(std::string name, int paramIndex, unsigned int tableRow);
     
 #define FIRST_READASCII_PARAM P_Dir
-#define LAST_READASCII_PARAM P_MaxHeat
 };
 
-#define NUM_READASCII_PARAMS (&LAST_READASCII_PARAM - &FIRST_READASCII_PARAM + 1)
+#define NUM_READASCII_PARAMS (lastParam - &FIRST_READASCII_PARAM + 1)
  
 #define P_DirString "DIR"
 #define P_DirBaseString "DIRBASE"
 #define P_IndexString "IND"
-
-#define P_SPArrString "ARRSP"
-#define P_PArrString "ARRP"
-#define P_IArrString "ARRI"
-#define P_DArrString "ARRD"
-#define P_MaxHeatArrString "ARRMH"
 
 #define P_RampingString "CURRMP"
 #define P_RampOnString "RMP"
@@ -98,10 +111,8 @@ private:
 #define P_StepsPerMinString "STPNUM"
 #define P_CurTempString "CUR"
 
-#define P_SPOutString "SP"
-#define P_PString "P"
-#define P_IString "I"
-#define P_DString "D"
-#define P_MaxHeatString "MH"
+#define ArrayPrefix "ARR"
+
+#define FILE_FORMAT_INCORRECT "ReadASCII: Warning! File is incorrectly formatted"
 
 #endif /* READASCII_H */

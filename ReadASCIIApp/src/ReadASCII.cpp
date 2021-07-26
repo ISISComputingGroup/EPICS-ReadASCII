@@ -5,6 +5,7 @@
 #include <math.h>
 #include <exception>
 #include <iostream>
+#include <fstream>
 
 #include <epicsTypes.h>
 #include <epicsTime.h>
@@ -54,12 +55,6 @@ ReadASCII::ReadASCII(const char *portName, const char *searchDir, const int step
     createParam(P_DirBaseString, asynParamOctet, &P_DirBase);
     createParam(P_IndexString, asynParamInt32, &P_Index);
 
-    createParam(P_SPArrString, asynParamFloat64Array, &P_SPArr);
-    createParam(P_PArrString, asynParamFloat64Array, &P_PArr);
-    createParam(P_IArrString, asynParamFloat64Array, &P_IArr);
-    createParam(P_DArrString, asynParamFloat64Array, &P_DArr);
-    createParam(P_MaxHeatArrString, asynParamFloat64Array, &P_MaxHeatArr);
-
     createParam(P_RampingString, asynParamInt32, &P_Ramping);
     createParam(P_RampOnString, asynParamInt32, &P_RampOn);
     createParam(P_LookUpOnString, asynParamInt32, &P_LookUpOn);
@@ -68,20 +63,6 @@ ReadASCII::ReadASCII(const char *portName, const char *searchDir, const int step
     createParam(P_SPRBVString, asynParamFloat64, &P_SPRBV);
     createParam(P_RampRateString, asynParamFloat64, &P_RampRate);
     createParam(P_StepsPerMinString, asynParamFloat64, &P_StepsPerMin);
-    createParam(P_CurTempString, asynParamFloat64, &P_CurTemp);
-
-    createParam(P_SPOutString, asynParamFloat64, &P_SPOut);
-    createParam(P_PString, asynParamFloat64, &P_P);
-    createParam(P_IString, asynParamFloat64, &P_I);
-    createParam(P_DString, asynParamFloat64, &P_D);
-    createParam(P_MaxHeatString, asynParamFloat64, &P_MaxHeat);
-    
-    //Allocate column data
-    pSP_ = (epicsFloat64 *)calloc(INIT_ROW_NUM, sizeof(epicsFloat64));
-    pP_ = (epicsFloat64 *)calloc(INIT_ROW_NUM, sizeof(epicsFloat64));
-    pI_ = (epicsFloat64 *)calloc(INIT_ROW_NUM, sizeof(epicsFloat64));
-    pD_ = (epicsFloat64 *)calloc(INIT_ROW_NUM, sizeof(epicsFloat64));
-    pMaxHeat_ = (epicsFloat64 *)calloc(INIT_ROW_NUM, sizeof(epicsFloat64));
 
     //Init
     setStringParam(P_Dir, "Default.txt");
@@ -92,6 +73,15 @@ ReadASCII::ReadASCII(const char *portName, const char *searchDir, const int step
     setIntegerParam(P_Ramping, 0);
     setIntegerParam(P_RampOn, 0);
     setIntegerParam(P_LookUpOn, 0);
+
+    char localDir[DIR_LENGTH], dir[DIR_LENGTH];
+    getStringParam(P_DirBase, DIR_LENGTH, dir);
+    getStringParam(P_Dir, DIR_LENGTH, localDir);
+    strcat(dir, "/");
+    strcat(dir, localDir);
+    status = createParams(dir);
+
+    createParam(P_CurTempString, asynParamFloat64, &P_CurTemp);
 
     // Do no initialise P_SPOut here because it will be sent to the eurotherm
 
@@ -187,16 +177,12 @@ asynStatus ReadASCII::writeInt32(asynUser *pasynUser, epicsInt32 value)
         {
             if (value >= 0 && value < rowNum)
             {
-                //update all column floats
-                setDoubleParam(P_SPOut, pSP_[value]);
-                setDoubleParam(P_P, pP_[value]);
-                setDoubleParam(P_I, pI_[value]);
-                setDoubleParam(P_D, pD_[value]);
-                setDoubleParam(P_MaxHeat, pMaxHeat_[value]);
-                if (!quietOnSetPoint) {
-                    std::cerr << "ReadASCII: Setting SP to " << pSP_[value] << std::endl;
-                    std::cerr << "ReadASCII: Updating P=" << pP_[value] << " I=" << pI_[value] << " D=" << pD_[value] << " MP=" << pMaxHeat_[value] << std::endl;
+                std::unordered_map<std::string, int>::iterator it;
+                for (it = pv_index_values_updated.begin(); it != pv_index_values_updated.end(); it++)
+                {
+                    setParamTableValue(it->first, it->second, value);
                 }
+                setParamTableValue(config_setpoint_value.first, config_setpoint_value.second, value);
             }
             else
             {
@@ -220,7 +206,7 @@ asynStatus ReadASCII::writeInt32(asynUser *pasynUser, epicsInt32 value)
             {
                 double curTemp;
                 getDoubleParam(P_CurTemp, &curTemp);
-                updatePID(getSPInd(curTemp));
+                updateControlValues(getSPInd(curTemp));
             }
         }
         else
@@ -272,14 +258,14 @@ asynStatus ReadASCII::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 
             //get current temperature and set as SP
             getDoubleParam(P_CurTemp, &startTemp);
-            setDoubleParam(P_SPOut, startTemp);
+            setDoubleParam(config_setpoint_value.second, startTemp);
             if (!quietOnSetPoint) {
                 std::cerr << "ReadASCII: Setting SP to " << startTemp << " and ramping" << std::endl;
             }
             //update PIDs
             if (LUTOn)
             {
-                updatePID(getSPInd(startTemp));
+                updateControlValues(getSPInd(startTemp));
             }
 
             //start ramping
@@ -290,7 +276,7 @@ asynStatus ReadASCII::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 
         } else {
             //directly output SP
-            setDoubleParam(P_SPOut, value);
+            setDoubleParam(config_setpoint_value.second, value);
             setIntegerParam(P_Ramping, 0);
             if (!quietOnSetPoint) {
                 std::cerr << "ReadASCII: Setting SP to " << value << " (no ramp)" << std::endl;
@@ -298,7 +284,7 @@ asynStatus ReadASCII::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
             //update PIDs
             if (LUTOn)
             {
-                updatePID(getSPInd(value));
+                updateControlValues(getSPInd(value));
             }
         }
     }
@@ -326,24 +312,27 @@ asynStatus ReadASCII::readFloat64Array(asynUser *pasynUser, epicsFloat64 *value,
     int function = pasynUser->reason;
     asynStatus status = asynSuccess;
     const char *functionName = "readFloat64Array";
-
-    ncopy = ( (nElements < rowNum) ? nElements : rowNum );
-    if (function == P_SPArr) {
-        memcpy(value, pSP_, ncopy*sizeof(epicsFloat64));
+    std::unordered_map<std::string, int>::iterator it;
+    for (it = pv_index_arrays.begin(); it != pv_index_arrays.end(); it++)
+    {
+        if (pv_data_column_reference.find(it->first) != pv_data_column_reference.end())
+        {
+            try
+            {
+                if (function == it->second) {
+                    memcpy(value, pv_data_column_reference[it->first]->data(), ncopy * sizeof(epicsFloat64));
+                }
+            }
+            catch (std::out_of_range)
+            {
+                std::cerr << FILE_FORMAT_INCORRECT << std::endl;
+            }
+        }
+        else
+        {
+            std::cerr << "ReadASCII: WARNING - parameter name: " << it->first << " doesn't have associated table column" << std::endl;
+        }
     }
-    else if (function == P_PArr) {
-        memcpy(value, pP_, ncopy*sizeof(epicsFloat64));
-    }
-    else if (function == P_IArr) {
-        memcpy(value, pI_, ncopy*sizeof(epicsFloat64));
-    }
-    else if (function == P_DArr) {
-        memcpy(value, pD_, ncopy*sizeof(epicsFloat64));
-    }
-    else if (function == P_MaxHeatArr) {
-        memcpy(value, pMaxHeat_, ncopy*sizeof(epicsFloat64));
-    }
-    *nIn = ncopy;
 
     if (status)
         epicsSnprintf(pasynUser->errorMessage, pasynUser->errorMessageSize,
@@ -390,7 +379,7 @@ void ReadASCII::rampThread(void)
         getDoubleParam(P_SPRBV, &SPRBV);
 
         //get current SP
-        getDoubleParam(P_SPOut, &curSP);
+        getDoubleParam(config_setpoint_value.second, &curSP);
 
         //get target
         getDoubleParam(P_Target, &target);
@@ -435,7 +424,7 @@ void ReadASCII::rampThread(void)
         rate /= SECONDS_IN_MINUTE;
             
         //SP may have changed
-        getDoubleParam(P_SPOut, &curSP);
+        getDoubleParam(config_setpoint_value.second, &curSP);
 
         //target may have changed
         double oldTarget = target;
@@ -445,7 +434,7 @@ void ReadASCII::rampThread(void)
         {
             //start back at current temp
             getDoubleParam(P_CurTemp, &curSP);
-            setDoubleParam(P_SPOut, curSP);
+            setDoubleParam(config_setpoint_value.second, curSP);
             std::cerr << "ReadASCII: RAMP: new SP " << newSP << std::endl;
             callParamCallbacks();
             continue;
@@ -463,7 +452,7 @@ void ReadASCII::rampThread(void)
             newSP = curSP + wait*rate;
         }
 
-        setDoubleParam(P_SPOut, newSP);
+        setDoubleParam(config_setpoint_value.second, newSP);
         std::cerr << "ReadASCII: RAMP: new SP " << newSP << std::endl;
 
         //check PID table in use
@@ -478,19 +467,18 @@ void ReadASCII::rampThread(void)
 
 }
 
-// if file is bad, rowNum == 0 and so returns -1
 int ReadASCII::getSPInd (double SP)
 {
     //NOTE: this assumes the lookup table is in order
 
     for (int i = 0; i<rowNum; i++)
     {
-        double SPLookUp = pSP_[i];
+        double SPLookUp = getSetpointValue(i);
         if (SP < SPLookUp)
         {
             if (i==0)
             {
-                std::cerr << "ReadASCII: SP below Look Up Lower Range, " << SP << " < " << pSP_[0] << std::endl;
+                std::cerr << "ReadASCII: SP below Look Up Lower Range, " << SP << " < " << getSetpointValue(0) << std::endl;
                 return 0;
             }
             else
@@ -499,28 +487,26 @@ int ReadASCII::getSPInd (double SP)
     }
     if (rowNum > 0)
     {
-        std::cerr << "ReadASCII: SP above Look Up Higher Range, " << SP << " > " << pSP_[rowNum - 1] << std::endl;
+        std::cerr << "ReadASCII: SP above Look Up Higher Range, " << SP << " > " << getSetpointValue(rowNum-1) << std::endl;
     }
     return rowNum - 1;
 }
 
-void ReadASCII::updatePID(int index)
+void ReadASCII::updateControlValues(int index)
 {
     if (index < 0 || index >= rowNum)
     {
         return;
     }
-    // Set to minus one first and then the actual value.
-    // This marks the value as "changed" so that the monitor actually gets fired.
-    setDoubleParam(P_P, -1);
-    setDoubleParam(P_P, pP_[index]);
-    setDoubleParam(P_I, -1);
-    setDoubleParam(P_I, pI_[index]);
-    setDoubleParam(P_D, -1);
-    setDoubleParam(P_D, pD_[index]);
-    setDoubleParam(P_MaxHeat, -1);
-    setDoubleParam(P_MaxHeat, pMaxHeat_[index]);
-    std::cerr << "ReadASCII: Updating P=" << pP_[index] << " I=" << pI_[index] << " D=" << pD_[index] << " MP=" << pMaxHeat_[index] << std::endl;
+    std::unordered_map<std::string, int>::iterator it;
+    std::string prnt = "READASCII: Setting new control and tuning values: ";
+    for (it = pv_index_values_updated.begin(); it != pv_index_values_updated.end(); it++)
+    {
+        setDoubleParam(it->second, -1);
+        float ret = setParamTableValue(it->first, it->second, index);
+        prnt += it->first + ":" + std::to_string(ret) + ", ";
+    }
+    std::cerr << prnt + "\n";
 }
 
 void ReadASCII::checkLookUp (double newSP, double oldSP)
@@ -533,7 +519,7 @@ void ReadASCII::checkLookUp (double newSP, double oldSP)
 
     if (newInd != oldInd)
     {
-        updatePID(newInd);
+        updateControlValues(newInd);
     }
 }
 
@@ -576,61 +562,269 @@ void ReadASCII::readFilePoll(void)
     }
 }
 
-asynStatus ReadASCII::readFile(const char *dir)
+asynStatus ReadASCII::readFile(const char *dir, bool retry)
 {
-    //Reads PID values from a file and places them in an array
-    float SP, P, I, D, maxHeater;
-    int ind = 0;
-    FILE *fp;
-    rowNum = 0;
+    std::ifstream file(dir);
+    std::string line;
 
-    if (NULL != (fp = fopen(dir, "rt"))) {
+    std::vector<std::string> headers;
 
-        //ignore first line
-        fscanf(fp, "%*[^\n]\n");
+    std::vector<std::vector<epicsFloat64>> settingsTableNew;
 
-        int result = fscanf(fp, "%f %f %f %f %f", &SP, &P, &I, &D, &maxHeater);
 
-        //check for incorrect format
-        if (result < 5) {
-            std::cerr << "ReadASCII: File format incorrect: " << dir << std::endl;
-            fclose(fp);
-            fileBad = true;
-            return asynError;
+    int i = -1;
+    bool fileEdited = false;
+    while (std::getline(file, line, '\n'))
+    {
+        // grab first line to get column headers
+        if (i == -1)
+        {
+            for (std::string str : splitLine(line))
+            {
+                bool paramFound = false;
+
+                // find out if this parameter exists
+                if (config_setpoint_value.first == str)
+                {
+                    paramFound = true;
+                }
+                std::unordered_map<std::string, int>::iterator it;
+                for (it = pv_index_values_updated.begin(); it != pv_index_values_updated.end(); it++)
+                {
+                    if (it->first == str)
+                    {
+                        paramFound = true;
+                    }
+                }
+                if (paramFound)
+                {
+                    // if parameter exists then we can associate data
+                    headers.push_back(str);
+                }
+                else
+                {
+                    fileEdited = true;
+                }
+            }
+        }
+        else
+        {
+            // initialize column vectors from first line
+            int j = 0;
+            if (i == 0)
+            {
+                for (std::string str : splitLine(line))
+                {
+                    if (j < headers.size())
+                    {
+                        settingsTableNew.push_back(std::vector<epicsFloat64>());
+                    }
+                    j++;
+                }
+            }
+            j = 0;
+            for (std::string str : splitLine(line))
+            {
+                try
+                {
+                    if (j < headers.size())
+                    {
+                        settingsTableNew[j].push_back(epicsFloat64(std::stof(str)));
+                    }
+                }
+                catch (std::out_of_range)
+                {
+                    std::cerr << FILE_FORMAT_INCORRECT << std::endl;
+                }
+                catch (std::invalid_argument)
+                {
+                    std::cerr << FILE_FORMAT_INCORRECT << std::endl;
+                }
+                j++;
+            }
+        }
+        i++;
+    }
+
+    if (!fileEdited || retry)
+    {
+        settingsTable = settingsTableNew;
+
+        rowNum = i;
+        std::cerr << "ReadASCII: read " << rowNum << " lines from file: " << dir << std::endl;
+        file.close();
+        pv_data_column_reference.clear();
+        for (int j = 0; j < settingsTable.size(); j++)
+        {
+            try
+            {
+                pv_data_column_reference[ArrayPrefix + headers[j]] = &settingsTable[j];
+                pv_data_column_reference[headers[j]] = &settingsTable[j];
+                doCallbacksFloat64Array(settingsTable[j].data(), settingsTable[j].size(), pv_index_arrays[ArrayPrefix + headers[j]], 0);
+            }
+            catch (std::out_of_range)
+            {
+                std::cerr << FILE_FORMAT_INCORRECT << std::endl;
+            }
         }
 
-        do{
-            pSP_[ind] = SP;
-            pP_[ind] = P;
-            pI_[ind] = I;
-            pD_[ind] = D;
-            pMaxHeat_[ind] = maxHeater;
-
-            ind++;
-
-        } while (fscanf(fp, "%f %f %f %f %f", &SP, &P, &I, &D, &maxHeater) != EOF && ind < INIT_ROW_NUM);
-
-        fclose(fp);
-
-        rowNum = ind;
-
-        doCallbacksFloat64Array(pSP_, rowNum, P_SPArr, 0);
-        doCallbacksFloat64Array(pP_, rowNum, P_PArr, 0);
-        doCallbacksFloat64Array(pI_, rowNum, P_IArr, 0);
-        doCallbacksFloat64Array(pD_, rowNum, P_DArr, 0);
-        doCallbacksFloat64Array(pMaxHeat_, rowNum, P_MaxHeatArr, 0);
-        std::cerr << "ReadASCII: read " << rowNum << " lines from file: " << dir << std::endl;
+        fileBad = false;
     }
-    else {
-        //send a file not found error
-        std::cerr << "ReadASCII: File Open Failed: " << dir << ": " << strerror(errno) << std::endl;
-        fileBad = true;
-        return asynError;
-    }	
-
-    fileBad = false;
+    else
+    {
+        std::cerr << "ReadASCII: File headers modified during run \n";
+        settingsTable.clear();
+        pv_data_column_reference.clear();
+        createParams(dir);
+        readFile(dir, true);
+    }
     return asynSuccess;
-    
+
+
+}
+
+asynStatus ReadASCII::createParams(const char* dir)
+{
+    std::ifstream file(dir);
+    std::string line;
+    std::getline(file, line, '\n');
+
+    std::vector<std::string> names;
+
+    for (std::string str : splitLine(line))
+    {
+        names.push_back(str);
+    }
+
+    int j = 0;
+
+    for (std::string name : names)
+    {
+        std::string a = ArrayPrefix;
+        addParameter(a + names[j], asynParamFloat64Array, ReadASCII::IndexType::ARRAY);
+        if (j == 0)
+        {
+            addParameter(names[j], asynParamFloat64, ReadASCII::IndexType::SETPOINT);
+        }
+        else
+        {
+            addParameter(names[j], asynParamFloat64, ReadASCII::IndexType::VALUE);
+        }
+        j++;
+    }
+    return asynSuccess;
+}
+
+epicsFloat64 ReadASCII::getSetpointValue(unsigned int tableRowIndex)
+{
+    try
+    {
+        if (pv_data_column_reference.find(config_setpoint_value.first) != pv_data_column_reference.end())
+        {
+            return epicsFloat64(pv_data_column_reference[config_setpoint_value.first]->at(tableRowIndex));
+        }
+        else
+        {
+            std::cerr << "ReadASCII: Setpoint: " << config_setpoint_value.first << " does not have associated table data \n";
+        }
+    }
+    catch (std::out_of_range e)
+    {
+        std::cerr << "ReadASCII: Exception Caught when reading setpoint parameter: " << e.what();
+    }
+    std::cerr << "ReadASCII: Critical error, could not read setpoint, unexpected behaviour inbound \n";
+    return epicsFloat64(0);
+}
+
+std::vector<std::string> ReadASCII::splitLine(std::string line)
+{
+    std::vector<std::string> out;
+    while (line.size() > 0)
+    {
+        std::size_t pos = line.find(' ');
+        if (pos == std::string::npos)
+        {
+            break;
+        }
+        out.push_back(line.substr(0, pos));
+        line = line.substr(pos + 1);
+    }
+    out.push_back(line);
+    return out;
+}
+
+void ReadASCII::addParameter(std::string name, asynParamType type, IndexType ind, std::vector<epicsFloat64>* columnReference)
+{
+    switch (ind)
+    {
+    case ReadASCII::IndexType::ARRAY:
+    {
+        if (pv_index_arrays.find(name) == pv_index_arrays.end())
+        {
+            pv_index_arrays[name] = 0;
+            if (createParam(name.c_str(), type, &pv_index_arrays[name]) == asynSuccess)
+            {
+                lastParam = &pv_index_arrays[name];
+            }
+        }
+        break;
+    }
+    case ReadASCII::IndexType::VALUE:
+    {
+        if (pv_index_values_updated.find(name) == pv_index_values_updated.end())
+        {
+            pv_index_values_updated[name] = 0;
+            if (createParam(name.c_str(), type, &pv_index_values_updated[name]) == asynSuccess)
+            {
+                lastParam = &pv_index_values_updated[name];
+            }
+        }
+        break;
+    }
+    case ReadASCII::IndexType::SETPOINT:
+    {
+        config_setpoint_value = std::make_pair(name, 0);
+        if (createParam(name.c_str(), type, &config_setpoint_value.second) == asynSuccess)
+        {
+            lastParam = &config_setpoint_value.second;
+        }
+        break;
+    }
+    }
+    try
+    {
+        if (columnReference != 0)
+        {
+            pv_data_column_reference[name] = columnReference;
+        }
+    }
+    catch (std::out_of_range)
+    {
+        std::cerr << FILE_FORMAT_INCORRECT << std::endl;
+    }
+}
+
+epicsFloat64 ReadASCII::setParamTableValue(std::string name, int paramIndex, unsigned int tableRow)
+{
+    if (pv_data_column_reference.find(name) != pv_data_column_reference.end())
+    {
+        try
+        {
+            epicsFloat64 f = pv_data_column_reference[name]->at(tableRow);
+            setDoubleParam(paramIndex, f);
+            return f;
+        }
+        catch (std::out_of_range e)
+        {
+            std::cerr << "ReadASCII: Exception Caught when writing to parameter: " << e.what();
+        }
+    }
+    else
+    {
+        std::cerr << "ReadASCII: WARNING - parameter name: " << name << " doesn't have associated table column. Setting value to zero" << std::endl;
+    }
+    setDoubleParam(paramIndex, 0);
+    return epicsFloat64(0.0f);
 }
 
 bool ReadASCII::isModified(const char *checkDir)
