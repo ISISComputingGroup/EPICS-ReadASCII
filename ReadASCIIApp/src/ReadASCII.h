@@ -40,8 +40,8 @@ protected:
     int P_Target; //float
     int P_SPRBV; //float
 
-    int* lastParam = 0;
-
+	int* lastParam;
+	
     // for float64array values. <name, parameter index>
     std::unordered_map<std::string, int> pv_index_arrays;
 
@@ -82,7 +82,7 @@ private:
 
     epicsFloat64 getSetpointValue(unsigned int tableRowIndex);
 
-    enum class IndexType
+    enum IndexType
     {
         ARRAY, VALUE, SETPOINT
     };
@@ -93,9 +93,10 @@ private:
     epicsFloat64 setParamTableValue(std::string name, int paramIndex, unsigned int tableRow);
     
 #define FIRST_READASCII_PARAM P_Dir
+#define LAST_READASCII_PARAM P_SPRBV
 };
 
-#define NUM_READASCII_PARAMS (lastParam - &FIRST_READASCII_PARAM + 1)
+#define NUM_READASCII_PARAMS (&LAST_READASCII_PARAM - &FIRST_READASCII_PARAM + 1)
  
 #define P_DirString "DIR"
 #define P_DirBaseString "DIRBASE"

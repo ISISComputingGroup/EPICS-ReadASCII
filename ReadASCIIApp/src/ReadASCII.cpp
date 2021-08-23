@@ -503,8 +503,8 @@ void ReadASCII::updateControlValues(int index)
     for (it = pv_index_values_updated.begin(); it != pv_index_values_updated.end(); it++)
     {
         setDoubleParam(it->second, -1);
-        float ret = setParamTableValue(it->first, it->second, index);
-        prnt += it->first + ":" + std::to_string(ret) + ", ";
+        epicsFloat64 ret = setParamTableValue(it->first, it->second, index);
+        prnt += it->first + ":" + std::to_string(static_cast<long double>(ret)) + ", ";  // long double cast needed for VS2010
     }
     std::cerr << prnt + "\n";
 }
@@ -577,10 +577,12 @@ asynStatus ReadASCII::readFile(const char *dir, bool retry)
     while (std::getline(file, line, '\n'))
     {
         // grab first line to get column headers
+        std::vector<std::string> split_line = splitLine(line);
         if (i == -1)
         {
-            for (std::string str : splitLine(line))
+            for (std::vector<std::string>::const_iterator lit = split_line.cbegin(); lit != split_line.cend(); ++lit)
             {
+				const std::string& str = *lit;
                 bool paramFound = false;
 
                 // find out if this parameter exists
@@ -613,8 +615,9 @@ asynStatus ReadASCII::readFile(const char *dir, bool retry)
             int j = 0;
             if (i == 0)
             {
-                for (std::string str : splitLine(line))
+                for (std::vector<std::string>::const_iterator lit = split_line.cbegin(); lit != split_line.cend(); ++lit)
                 {
+				    const std::string& str = *lit;
                     if (j < headers.size())
                     {
                         settingsTableNew.push_back(std::vector<epicsFloat64>());
@@ -623,8 +626,9 @@ asynStatus ReadASCII::readFile(const char *dir, bool retry)
                 }
             }
             j = 0;
-            for (std::string str : splitLine(line))
+            for (std::vector<std::string>::const_iterator lit = split_line.cbegin(); lit != split_line.cend(); ++lit)
             {
+				const std::string& str = *lit;
                 try
                 {
                     if (j < headers.size())
@@ -689,17 +693,13 @@ asynStatus ReadASCII::createParams(const char* dir)
     std::string line;
     std::getline(file, line, '\n');
 
-    std::vector<std::string> names;
-
-    for (std::string str : splitLine(line))
-    {
-        names.push_back(str);
-    }
+    std::vector<std::string> names = splitLine(line);
 
     int j = 0;
 
-    for (std::string name : names)
+    for (std::vector<std::string>::const_iterator it = names.cbegin(); it != names.cend(); ++it)
     {
+        const std::string& name = *it;
         std::string a = ArrayPrefix;
         addParameter(a + names[j], asynParamFloat64Array, ReadASCII::IndexType::ARRAY);
         if (j == 0)
