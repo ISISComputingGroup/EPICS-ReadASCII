@@ -5,7 +5,7 @@
 
 #include "asynPortDriver.h"
 #include <time.h>
-#include <unordered_map>
+#include <map>
 
 #define DIR_LENGTH 260
 
@@ -14,6 +14,7 @@ class ReadASCII : public asynPortDriver
 {
 public:
     ReadASCII(const char* portName, const char *searchDir, const int stepsPerMinute, const bool logOnSetPoint);
+
 
     virtual asynStatus writeOctet(asynUser *pasynUser, const char *value, size_t maxChars, size_t *nActual);
     virtual asynStatus writeInt32(asynUser *pasynUser, epicsInt32 value);
@@ -25,7 +26,6 @@ public:
     void rampThread(void);
 
 protected:
-    // these are connected to PVs
     int P_Dir; // string
     int P_DirBase; // string
     int P_Index; //int
@@ -40,64 +40,71 @@ protected:
     int P_Target; //float
     int P_SPRBV; //float
 
-	int* lastParam;
-	
-    // for float64array values. <name, parameter index>
-    std::unordered_map<std::string, int> pv_index_arrays;
+    //Defines information about a parameter
+    struct Parameter
+    {
+        int index;
+        std::string name;
+        asynParamType type;
 
-    // for single float64 values, will be sent to updatePID. <name, parameter index>
-    std::unordered_map<std::string, int> pv_index_values_updated;
+        Parameter() {}
+    };
 
-    // first column in settings table, declaring setpoints for updatePID. <name, parameter index>
-    std::pair<std::string, int> config_setpoint_value;
+    //Holds all parameters in use by ReadASCII
+    std::vector<Parameter> parameters;
 
-    // holds reference from parameter to settingsTable column
-    std::unordered_map<std::string, std::vector<epicsFloat64>*> pv_data_column_reference;
+    struct LookupTableColumn
+    {
+        std::string header;
+        std::vector<epicsFloat64> values;
+        int rows;
+
+        LookupTableColumn() {}
+    };
+
+    //LookupTableColumn lookupSetpoints;
+    //First column is always reserved for setpoints
+    std::vector<LookupTableColumn> lookupTable;
 
 private:
-    // settings values table <column <value>>
-    std::vector<std::vector<epicsFloat64>> settingsTable;
+    //This is for dynamically creating asyn parameters
+    asynStatus drvUserCreate(asynUser* pasynUser, const char* drvInfo, const char** pptypeName, size_t* psize);
 
     epicsEventId eventId_;
     time_t lastModified;
-    char lastDir[DIR_LENGTH];
-    int rowNum; //keeps track of how many rows there are in settingsTable
+    int rowNum;
     bool fileBad; //stops the driver from repeatedly checking bad files
+    bool dynamicParameters = false; //set to true to enable dynamic creation of parameters
 
     bool isModified(const char *checkDir);
+    asynStatus readFile(const char *dir);
     void checkLookUp (double newSP, double oldSP);
     int getSPInd (double SP);
+    void updateTableValues(int index);
     asynStatus readFileBasedOnParameters();
-    std::vector<std::string> splitLine(std::string line);
     bool quietOnSetPoint;
 
-    // updates values in control and tuning using settingsTable
-    void updateControlValues(int index);
+    //Creates asyn parameters and adds them to the parameters list. Optionally links another variable to the created index.
+    asynStatus addParameter(const std::string& name, const asynParamType& type, int* index = nullptr);
 
-    // reads the file and updates settingsTable unless headers changed. retry is for situations where file was modified during run
-    asynStatus readFile(const char* dir, bool retry = false);
+    //Throws exception if doesnt find a parameter
+    Parameter* findParam(const std::string& name);
+    Parameter* findParam(const int& index);
 
-    // opens lookup file and creates parameters from column headers
-    asynStatus createParams(const char* dir);
+    //Resets the lookup table and fills it with current values in the file
+    asynStatus populateLookupTable(const std::vector<std::vector<std::string>>& values);
 
-    epicsFloat64 getSetpointValue(unsigned int tableRowIndex);
+    //Creates missing parameters based on table column headers
+    void addTableParameters();
 
-    enum IndexType
-    {
-        ARRAY, VALUE, SETPOINT
-    };
-    // creates parameter and optionally associates column in settingsTable with data
-    void addParameter(std::string name, asynParamType type, IndexType ind, std::vector<epicsFloat64>* columnReference = 0);
+    asynStatus updateParameter(epicsFloat64 value, const std::string& name);
 
-    // will update parameter with it's settingsTable lookup value and return value set
-    epicsFloat64 setParamTableValue(std::string name, int paramIndex, unsigned int tableRow);
-    
-#define FIRST_READASCII_PARAM P_Dir
-#define LAST_READASCII_PARAM P_SPRBV
+    LookupTableColumn* findColumnByHeader(std::string header);
+    std::vector<std::vector<std::string>> splitFileToColumns(std::ifstream& stream);
+    std::vector<std::string> splitLine(const std::string& line, char delim);
 };
+#define ARRAY_PARAMETER_PREFIX "ARR"
 
-#define NUM_READASCII_PARAMS (&LAST_READASCII_PARAM - &FIRST_READASCII_PARAM + 1)
- 
 #define P_DirString "DIR"
 #define P_DirBaseString "DIRBASE"
 #define P_IndexString "IND"
@@ -112,8 +119,5 @@ private:
 #define P_StepsPerMinString "STPNUM"
 #define P_CurTempString "CUR"
 
-#define ArrayPrefix "ARR"
-
-#define FILE_FORMAT_INCORRECT "ReadASCII: Warning! File is incorrectly formatted"
-
+#define P_SPOutString "SP"
 #endif /* READASCII_H */
