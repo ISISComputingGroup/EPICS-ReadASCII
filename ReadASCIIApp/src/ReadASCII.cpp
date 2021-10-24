@@ -1,10 +1,11 @@
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
+#include <cstdlib>
+#include <cstring>
+#include <cstdio>
 #include <errno.h>
-#include <math.h>
+#include <cmath>
 #include <exception>
 #include <iostream>
+#include <boost/algorithm/string.hpp>
 
 #include <epicsTypes.h>
 #include <epicsTime.h>
@@ -15,15 +16,19 @@
 #include <epicsEvent.h>
 #include <iocsh.h>
 #include <errlog.h>
+#include <fstream>
+#include <istream>
+#include <sstream>
 
 #include <sys/stat.h>
 
-#include "ReadASCII.h"
-
 #include <macLib.h>
 #include <epicsGuard.h>
+#include "asynPortDriver.h"
 
 #include <epicsExport.h>
+
+#include "ReadASCII.h"
 
 #define INIT_ROW_NUM 60
 #define EPSILON 0.001
@@ -37,7 +42,6 @@ void rampThread(void *drvPvt);
 ReadASCII::ReadASCII(const char *portName, const char *searchDir, const int stepsPerMinute, const bool setQuietOnSetPoint)
    : asynPortDriver(portName, 
                     0, /* maxAddr */ 
-                    NUM_READASCII_PARAMS,
                     asynInt32Mask | asynFloat64Mask | asynFloat64ArrayMask | asynOctetMask | asynDrvUserMask, /* Interface mask */
                     asynInt32Mask | asynFloat64Mask | asynFloat64ArrayMask | asynOctetMask,  /* Interrupt mask */
                     ASYN_CANBLOCK, /* asynFlags.  This driver can block but it is not multi-device */
@@ -50,42 +54,29 @@ ReadASCII::ReadASCII(const char *portName, const char *searchDir, const int step
 
     eventId_ = epicsEventCreate(epicsEventEmpty);
 
-    createParam(P_DirString, asynParamOctet, &P_Dir);
-    createParam(P_DirBaseString, asynParamOctet, &P_DirBase);
-    createParam(P_IndexString, asynParamInt32, &P_Index);
+    addParameter(P_DirString, asynParamOctet, &P_Dir);
+    addParameter(P_DirBaseString, asynParamOctet, &P_DirBase);
+    addParameter(P_IndexString, asynParamInt32, &P_Index);
 
-    createParam(P_SPArrString, asynParamFloat64Array, &P_SPArr);
-    createParam(P_PArrString, asynParamFloat64Array, &P_PArr);
-    createParam(P_IArrString, asynParamFloat64Array, &P_IArr);
-    createParam(P_DArrString, asynParamFloat64Array, &P_DArr);
-    createParam(P_MaxHeatArrString, asynParamFloat64Array, &P_MaxHeatArr);
+    addParameter(P_RampingString, asynParamInt32, &P_Ramping);
+    addParameter(P_RampOnString, asynParamInt32, &P_RampOn);
+    addParameter(P_LookUpOnString, asynParamInt32, &P_LookUpOn);
 
-    createParam(P_RampingString, asynParamInt32, &P_Ramping);
-    createParam(P_RampOnString, asynParamInt32, &P_RampOn);
-    createParam(P_LookUpOnString, asynParamInt32, &P_LookUpOn);
+    addParameter(P_TargetString, asynParamFloat64, &P_Target);
+    addParameter(P_SPRBVString, asynParamFloat64, &P_SPRBV);
+    addParameter(P_RampRateString, asynParamFloat64, &P_RampRate);
+    addParameter(P_StepsPerMinString, asynParamFloat64, &P_StepsPerMin);
+    addParameter(P_CurTempString, asynParamFloat64, &P_CurTemp);
 
-    createParam(P_TargetString, asynParamFloat64, &P_Target);
-    createParam(P_SPRBVString, asynParamFloat64, &P_SPRBV);
-    createParam(P_RampRateString, asynParamFloat64, &P_RampRate);
-    createParam(P_StepsPerMinString, asynParamFloat64, &P_StepsPerMin);
-    createParam(P_CurTempString, asynParamFloat64, &P_CurTemp);
-
-    createParam(P_SPOutString, asynParamFloat64, &P_SPOut);
-    createParam(P_PString, asynParamFloat64, &P_P);
-    createParam(P_IString, asynParamFloat64, &P_I);
-    createParam(P_DString, asynParamFloat64, &P_D);
-    createParam(P_MaxHeatString, asynParamFloat64, &P_MaxHeat);
-    
-    //Allocate column data
-    pSP_ = (epicsFloat64 *)calloc(INIT_ROW_NUM, sizeof(epicsFloat64));
-    pP_ = (epicsFloat64 *)calloc(INIT_ROW_NUM, sizeof(epicsFloat64));
-    pI_ = (epicsFloat64 *)calloc(INIT_ROW_NUM, sizeof(epicsFloat64));
-    pD_ = (epicsFloat64 *)calloc(INIT_ROW_NUM, sizeof(epicsFloat64));
-    pMaxHeat_ = (epicsFloat64 *)calloc(INIT_ROW_NUM, sizeof(epicsFloat64));
+    addParameter(P_SPOutString, asynParamFloat64);
 
     //Init
     setStringParam(P_Dir, "Default.txt");
     setStringParam(P_DirBase, searchDir);
+    fileBad = true;
+    rowNum = 0;
+    lastModified = 0;
+    quietOnSetPoint = setQuietOnSetPoint;
 
     setDoubleParam(P_RampRate, 1.0);
     setDoubleParam(P_StepsPerMin, stepsPerMinute);
@@ -93,12 +84,11 @@ ReadASCII::ReadASCII(const char *portName, const char *searchDir, const int step
     setIntegerParam(P_RampOn, 0);
     setIntegerParam(P_LookUpOn, 0);
 
-    // Do no initialise P_SPOut here because it will be sent to the eurotherm
+    //Try to read file once to load parameters
+    readFileBasedOnParameters();
 
-    lastModified = 0;
-    fileBad = true; //Set so that program doesn't attempt to read file before base dir is set
-    rowNum = 0;
-    quietOnSetPoint = setQuietOnSetPoint;
+    //From now on parameters need to be created dynamically
+    dynamicParameters = true;
 
     /* Create the thread that watches the file in the background 	*/
     status = (asynStatus)(epicsThreadCreate("ReadASCIIFile",
@@ -120,6 +110,47 @@ ReadASCII::ReadASCII(const char *portName, const char *searchDir, const int step
         return;
     }
 
+}
+
+// private constructor for testing
+ReadASCII::ReadASCII()
+   : asynPortDriver(std::to_string(rand()).c_str(), // this is so each test gets a unique port
+                    0, /* maxAddr */ 
+                    asynInt32Mask | asynFloat64Mask | asynFloat64ArrayMask | asynOctetMask | asynDrvUserMask, /* Interface mask */
+                    asynInt32Mask | asynFloat64Mask | asynFloat64ArrayMask | asynOctetMask,  /* Interrupt mask */
+                    ASYN_CANBLOCK, /* asynFlags.  This driver can block but it is not multi-device */
+                    0, /* Autoconnect */
+                    0, /* Default priority */
+                    0)	/* Default stack size*/
+{
+}
+
+
+asynStatus ReadASCII::drvUserCreate(asynUser* pasynUser, const char* drvInfo, const char** pptypeName, size_t* psize)
+{
+    if (!dynamicParameters)
+    {
+        return asynPortDriver::drvUserCreate(pasynUser, drvInfo, pptypeName, psize);
+    }
+    // Add missing parameter
+    try
+    {
+        findParam(drvInfo);
+    }
+    catch (...)
+    {
+        std::cerr << "ReadASCII:: Parameter missing: " << drvInfo << ", adding dynamically." << std::endl;
+        std::string name = std::string(drvInfo);
+        if (name.compare(0, strlen(ARRAY_PARAMETER_PREFIX), ARRAY_PARAMETER_PREFIX) == 0) {
+            // Callback will be set when the table values updates (populateLookupTable code)
+            addParameter(name, asynParamFloat64Array);
+        }
+        else
+        {
+            addParameter(name, asynParamFloat64);
+        }
+    }
+    return asynPortDriver::drvUserCreate(pasynUser, drvInfo, pptypeName, psize);
 }
 
 asynStatus ReadASCII::writeOctet(asynUser *pasynUser, const char *value, size_t maxChars, size_t *nActual)
@@ -187,15 +218,18 @@ asynStatus ReadASCII::writeInt32(asynUser *pasynUser, epicsInt32 value)
         {
             if (value >= 0 && value < rowNum)
             {
-                //update all column floats
-                setDoubleParam(P_SPOut, pSP_[value]);
-                setDoubleParam(P_P, pP_[value]);
-                setDoubleParam(P_I, pI_[value]);
-                setDoubleParam(P_D, pD_[value]);
-                setDoubleParam(P_MaxHeat, pMaxHeat_[value]);
                 if (!quietOnSetPoint) {
-                    std::cerr << "ReadASCII: Setting SP to " << pSP_[value] << std::endl;
-                    std::cerr << "ReadASCII: Updating P=" << pP_[value] << " I=" << pI_[value] << " D=" << pD_[value] << " MP=" << pMaxHeat_[value] << std::endl;
+                    std::cerr << "ReadASCII: Updating values: " << std::endl;
+                }
+                for (const LookupTableColumn& col : lookupTable)
+                {
+                    updateParameter(col.values[value], col.header);
+                    if (!quietOnSetPoint) {
+                        std::cerr << col.header << "=" << col.values[value] << " ";
+                    }
+                }
+                if (!quietOnSetPoint) {
+                    std::cerr << std::endl;
                 }
             }
             else
@@ -220,7 +254,7 @@ asynStatus ReadASCII::writeInt32(asynUser *pasynUser, epicsInt32 value)
             {
                 double curTemp;
                 getDoubleParam(P_CurTemp, &curTemp);
-                updatePID(getSPInd(curTemp));
+                updateTableValues(getSPInd(curTemp));
             }
         }
         else
@@ -272,14 +306,14 @@ asynStatus ReadASCII::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 
             //get current temperature and set as SP
             getDoubleParam(P_CurTemp, &startTemp);
-            setDoubleParam(P_SPOut, startTemp);
+            updateParameter(startTemp, P_SPOutString);
             if (!quietOnSetPoint) {
                 std::cerr << "ReadASCII: Setting SP to " << startTemp << " and ramping" << std::endl;
             }
             //update PIDs
             if (LUTOn)
             {
-                updatePID(getSPInd(startTemp));
+                updateTableValues(getSPInd(startTemp));
             }
 
             //start ramping
@@ -290,7 +324,7 @@ asynStatus ReadASCII::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
 
         } else {
             //directly output SP
-            setDoubleParam(P_SPOut, value);
+            updateParameter(value, P_SPOutString);
             setIntegerParam(P_Ramping, 0);
             if (!quietOnSetPoint) {
                 std::cerr << "ReadASCII: Setting SP to " << value << " (no ramp)" << std::endl;
@@ -298,7 +332,7 @@ asynStatus ReadASCII::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
             //update PIDs
             if (LUTOn)
             {
-                updatePID(getSPInd(value));
+                updateTableValues(getSPInd(value));
             }
         }
     }
@@ -317,7 +351,6 @@ asynStatus ReadASCII::writeFloat64(asynUser *pasynUser, epicsFloat64 value)
     return status;
 }
 
-
 asynStatus ReadASCII::readFloat64Array(asynUser *pasynUser, epicsFloat64 *value,
     size_t nElements, size_t *nIn)
 {
@@ -328,22 +361,19 @@ asynStatus ReadASCII::readFloat64Array(asynUser *pasynUser, epicsFloat64 *value,
     const char *functionName = "readFloat64Array";
 
     ncopy = ( (nElements < rowNum) ? nElements : rowNum );
-    if (function == P_SPArr) {
-        memcpy(value, pSP_, ncopy*sizeof(epicsFloat64));
+    std::string header = findParam(function)->name;
+    try
+    {
+        const LookupTableColumn* column = findColumnByHeader(header.substr(std::string(ARRAY_PARAMETER_PREFIX).size()));
+        memcpy(value, column->values.data(), ncopy * sizeof(epicsFloat64));
+        *nIn = ncopy;
     }
-    else if (function == P_PArr) {
-        memcpy(value, pP_, ncopy*sizeof(epicsFloat64));
+    catch (...)
+    {
+        std::cerr << "ReadASCII: unable to retrieve array data" << std::endl;
+        *nIn = 0;
+        status = asynError;
     }
-    else if (function == P_IArr) {
-        memcpy(value, pI_, ncopy*sizeof(epicsFloat64));
-    }
-    else if (function == P_DArr) {
-        memcpy(value, pD_, ncopy*sizeof(epicsFloat64));
-    }
-    else if (function == P_MaxHeatArr) {
-        memcpy(value, pMaxHeat_, ncopy*sizeof(epicsFloat64));
-    }
-    *nIn = ncopy;
 
     if (status)
         epicsSnprintf(pasynUser->errorMessage, pasynUser->errorMessageSize,
@@ -390,7 +420,7 @@ void ReadASCII::rampThread(void)
         getDoubleParam(P_SPRBV, &SPRBV);
 
         //get current SP
-        getDoubleParam(P_SPOut, &curSP);
+        getDoubleParam(findParam(P_SPOutString)->index, &curSP);
 
         //get target
         getDoubleParam(P_Target, &target);
@@ -435,7 +465,7 @@ void ReadASCII::rampThread(void)
         rate /= SECONDS_IN_MINUTE;
             
         //SP may have changed
-        getDoubleParam(P_SPOut, &curSP);
+        getDoubleParam(findParam(P_SPOutString)->index, &curSP);
 
         //target may have changed
         double oldTarget = target;
@@ -445,8 +475,9 @@ void ReadASCII::rampThread(void)
         {
             //start back at current temp
             getDoubleParam(P_CurTemp, &curSP);
-            setDoubleParam(P_SPOut, curSP);
-            std::cerr << "ReadASCII: RAMP: new SP " << newSP << std::endl;
+            updateParameter(curSP, P_SPOutString);
+            //setDoubleParam(findParamByName(P_SPOutString)->index, curSP);
+            std::cerr << "ReadASCII: RAMP: new SP " << curSP << std::endl;
             callParamCallbacks();
             continue;
         }
@@ -463,7 +494,8 @@ void ReadASCII::rampThread(void)
             newSP = curSP + wait*rate;
         }
 
-        setDoubleParam(P_SPOut, newSP);
+        updateParameter(newSP, P_SPOutString);
+        //setDoubleParam(findParamByName(P_SPOutString)->index, newSP);
         std::cerr << "ReadASCII: RAMP: new SP " << newSP << std::endl;
 
         //check PID table in use
@@ -481,30 +513,35 @@ void ReadASCII::rampThread(void)
 // if file is bad, rowNum == 0 and so returns -1
 int ReadASCII::getSPInd (double SP)
 {
-    //NOTE: this assumes the lookup table is in order
-
-    for (int i = 0; i<rowNum; i++)
+    try
     {
-        double SPLookUp = pSP_[i];
-        if (SP < SPLookUp)
+        for (int i = 0; i < rowNum; i++)
         {
-            if (i==0)
+            double SPLookUp = lookupTable[0].values[i];
+            if (SP < SPLookUp)
             {
-                std::cerr << "ReadASCII: SP below Look Up Lower Range, " << SP << " < " << pSP_[0] << std::endl;
-                return 0;
+                if (i == 0)
+                {
+                    std::cerr << "ReadASCII: SP below Look Up Lower Range, " << SP << " < " << lookupTable[0].values[0] << std::endl;
+                    return 0;
+                }
+                else
+                    return i - 1;
             }
-            else
-                return i - 1;
+        }
+        if (rowNum > 0)
+        {
+            std::cerr << "ReadASCII: SP above Look Up Higher Range, " << SP << " > " << lookupTable[0].values[rowNum - 1] << std::endl;
         }
     }
-    if (rowNum > 0)
+    catch (...) 
     {
-        std::cerr << "ReadASCII: SP above Look Up Higher Range, " << SP << " > " << pSP_[rowNum - 1] << std::endl;
+        std::cerr << "ReadASCII: Lookup table critical error, SP column is missing" << std::endl;
     }
     return rowNum - 1;
 }
 
-void ReadASCII::updatePID(int index)
+void ReadASCII::updateTableValues(int index)
 {
     if (index < 0 || index >= rowNum)
     {
@@ -512,15 +549,15 @@ void ReadASCII::updatePID(int index)
     }
     // Set to minus one first and then the actual value.
     // This marks the value as "changed" so that the monitor actually gets fired.
-    setDoubleParam(P_P, -1);
-    setDoubleParam(P_P, pP_[index]);
-    setDoubleParam(P_I, -1);
-    setDoubleParam(P_I, pI_[index]);
-    setDoubleParam(P_D, -1);
-    setDoubleParam(P_D, pD_[index]);
-    setDoubleParam(P_MaxHeat, -1);
-    setDoubleParam(P_MaxHeat, pMaxHeat_[index]);
-    std::cerr << "ReadASCII: Updating P=" << pP_[index] << " I=" << pI_[index] << " D=" << pD_[index] << " MP=" << pMaxHeat_[index] << std::endl;
+    // start loop at 1 as lookupTable[0] is the SP
+    std::cerr << "ReadASCII: Updating values: ";
+    for (int i = 1; i < lookupTable.size(); i++)
+    {
+        updateParameter(-1, lookupTable[i].header);
+        updateParameter(lookupTable[i].values[index], lookupTable[i].header);
+        std::cerr << lookupTable[i].header << "=" << lookupTable[i].values[index] << " ";
+    }
+    std::cerr << std::endl;
 }
 
 void ReadASCII::checkLookUp (double newSP, double oldSP)
@@ -533,14 +570,14 @@ void ReadASCII::checkLookUp (double newSP, double oldSP)
 
     if (newInd != oldInd)
     {
-        updatePID(newInd);
+        updateTableValues(newInd);
     }
 }
 
 void ReadASCII::readFilePoll(void)
 {
     //Thread to poll the file used in the PID lookup and update the array of values when the file is modified
-    char localDir[DIR_LENGTH], dirBase[DIR_LENGTH];
+    char localDir[DIR_LENGTH], dirBase[DIR_LENGTH * 2  + 1];
     asynStatus status;
 
     while (1) {
@@ -571,66 +608,244 @@ void ReadASCII::readFilePoll(void)
         lock();
 
         status = readFile(dirBase);
-
+        
         unlock();
     }
 }
 
 asynStatus ReadASCII::readFile(const char *dir)
 {
-    //Reads PID values from a file and places them in an array
-    float SP, P, I, D, maxHeater;
-    int ind = 0;
-    FILE *fp;
-    rowNum = 0;
-
-    if (NULL != (fp = fopen(dir, "rt"))) {
-
-        //ignore first line
-        fscanf(fp, "%*[^\n]\n");
-
-        int result = fscanf(fp, "%f %f %f %f %f", &SP, &P, &I, &D, &maxHeater);
-
-        //check for incorrect format
-        if (result < 5) {
-            std::cerr << "ReadASCII: File format incorrect: " << dir << std::endl;
-            fclose(fp);
-            fileBad = true;
-            return asynError;
-        }
-
-        do{
-            pSP_[ind] = SP;
-            pP_[ind] = P;
-            pI_[ind] = I;
-            pD_[ind] = D;
-            pMaxHeat_[ind] = maxHeater;
-
-            ind++;
-
-        } while (fscanf(fp, "%f %f %f %f %f", &SP, &P, &I, &D, &maxHeater) != EOF && ind < INIT_ROW_NUM);
-
-        fclose(fp);
-
-        rowNum = ind;
-
-        doCallbacksFloat64Array(pSP_, rowNum, P_SPArr, 0);
-        doCallbacksFloat64Array(pP_, rowNum, P_PArr, 0);
-        doCallbacksFloat64Array(pI_, rowNum, P_IArr, 0);
-        doCallbacksFloat64Array(pD_, rowNum, P_DArr, 0);
-        doCallbacksFloat64Array(pMaxHeat_, rowNum, P_MaxHeatArr, 0);
-        std::cerr << "ReadASCII: read " << rowNum << " lines from file: " << dir << std::endl;
-    }
-    else {
+    std::ifstream file(dir);
+    if (!file.good())
+    {
         //send a file not found error
         std::cerr << "ReadASCII: File Open Failed: " << dir << ": " << strerror(errno) << std::endl;
         fileBad = true;
+        rowNum = 0;
         return asynError;
-    }	
+    }
+    std::vector<std::vector<std::string>> valuesTable = splitStreamToColumns(file);
+    file.close();
+
+    populateLookupTable(valuesTable);
+    addTableParameters();
+
+    std::cerr << "ReadASCII: read " << rowNum + 1 << " lines from file: " << dir << std::endl;
 
     fileBad = false;
     return asynSuccess;
     
+}
+
+void ReadASCII::addTableParameters()
+{
+    // If any of this is already done its fine, it will simply do nothing
+    for (LookupTableColumn& column : lookupTable)
+    {
+        // findParam throws if it doesnt find parameter so we catch it to create params
+        try
+        {
+            findParam(column.header);
+        }
+        catch (...)
+        {
+            addParameter(column.header, asynParamFloat64);
+        }
+        try
+        {
+            findParam(ARRAY_PARAMETER_PREFIX + column.header);
+        }
+        catch (...)
+        {
+            addParameter(ARRAY_PARAMETER_PREFIX + column.header, asynParamFloat64Array);
+        }
+        doCallbacksFloat64Array(column.values.data(), column.rows, findParam(ARRAY_PARAMETER_PREFIX + column.header)->index, 0);
+    }
+}
+
+asynStatus ReadASCII::populateLookupTable(const std::vector<std::vector<std::string>>& values)
+{
+    lookupTable = std::vector<LookupTableColumn>();
+
+    //first column are setpoints - grab expected format from it
+    if (values.size() == 0)
+    {
+        std::cerr << "ReadASCII: Warning - lookup file is empty" << std::endl;
+        return asynError;
+    }
+    rowNum = values[0].size() - 1; // -1 as header row
+
+    //for every column
+    for (const std::vector<std::string>& column : values)
+    {
+        LookupTableColumn newCol = LookupTableColumn();
+        int rowCountColumn = 0;
+
+        //first value is column header
+        if (column.size() > 0)
+        {
+            std::string header = column[0];
+            boost::algorithm::to_lower(header);
+            if (header == "heater")
+            {
+                std::cerr << "ReadASCII: Warning! Outdated column header name is in use. Please view latest changes to ReadASCII. " <<
+                    "'Heater' will be replaced with 'MH' when reading the file." << std::endl;
+                header = "MH";
+                newCol.header = "MH";
+            }
+            else
+            {
+                newCol.header = column[0];
+            }
+        }
+        else
+        {
+            std::cerr << "ReadASCII: Empty column detected in lookup table" << std::endl;
+        }
+
+        //for every value in column
+        for (int i = 1; i < column.size(); i++)
+        {
+            //rest of values in a column should be floats
+            try
+            {
+                newCol.values.push_back(std::stof(column[i]));
+            }
+            catch (std::invalid_argument e)
+            {
+                std::cerr << "ReadASCII: Not-a-number value in lookup table found while trying to access " << i << " element in column: " << newCol.header <<
+                    " Missing values will be set to 0." << std::endl;
+                newCol.values.push_back(epicsFloat64(0.0f));
+            }
+            rowCountColumn++;
+        }
+        //check if there is a match between setpoints column and other columns
+        if (rowCountColumn != rowNum)
+        {
+            std::cerr << "ReadASCII: Warning - column malformed. Incorrect amount of rows in column: " << newCol.header << " Missing values will be set to 0." << std::endl;
+            while (rowCountColumn < rowNum)
+            {
+                newCol.values.push_back(epicsFloat64(0.0f));
+                rowCountColumn++;
+            }
+        }
+        newCol.rows = rowCountColumn;
+        lookupTable.push_back(newCol);
+    }
+    return asynSuccess;
+}
+
+std::vector<std::vector<std::string>> ReadASCII::splitStreamToColumns(std::istream& stream)
+{
+    std::vector<std::vector<std::string>> columns = std::vector<std::vector<std::string>>();
+
+    int i = 0;
+    std::string line;
+    while (std::getline(stream, line, '\n'))
+    {
+        std::vector<std::string> split_line = splitLine(line, ' ');
+        int j = 0;
+        while (columns.size() < split_line.size())
+        {
+            columns.push_back(std::vector<std::string>());
+        }
+
+        for (const std::string& s : split_line)
+        {
+            columns[j].push_back(s);
+            j++;
+        }
+
+        i++;
+    }
+
+    return columns;
+}
+
+std::vector<std::string> ReadASCII::splitLine(const std::string& line, char delim)
+{
+    std::vector<std::string> out;
+    std::istringstream iss(line);
+    std::string str;
+    while (std::getline(iss, str, delim)) { out.push_back(str); }
+    return out;
+}
+
+asynStatus ReadASCII::addParameter(const std::string& name, const asynParamType& type, int* index)
+{
+    Parameter param;
+    param.name = name;
+    param.type = type;
+    asynStatus status = asynSuccess;
+    status = createParam(name.c_str(), type, &param.index);
+    if (status == asynSuccess)
+    {
+        //link parameter struct index to another index variable if needed
+        if (index != nullptr)
+        {
+            *index = param.index;
+        }
+        parameters.push_back(param);
+        std::cerr << "ReadASCII: Added parameter: " << name <<", type: "<< param.type<< ", new index: " << param.index <<std::endl;
+    }
+    return status;
+}
+
+ReadASCII::Parameter* ReadASCII::findParam(const std::string& name)
+{
+    std::vector<Parameter>::iterator it = std::find_if(parameters.begin(), parameters.end(),
+        [&](Parameter param) {return param.name == name; });
+    if (it != parameters.end())
+    {
+        return &(*it);
+    }
+    else
+    {
+        throw std::out_of_range("Parameter not found!");
+    }
+}
+
+ReadASCII::Parameter* ReadASCII::findParam(const int& index)
+{
+    std::vector<Parameter>::iterator it = std::find_if(parameters.begin(), parameters.end(),
+        [&](Parameter param) {return param.index == index; });
+    if (it != parameters.end())
+    {
+        return &(*it);
+    }
+    else
+    {
+        throw std::out_of_range("Parameter not found!");
+    }
+}
+
+asynStatus ReadASCII::updateParameter(epicsFloat64 value, const std::string& name)
+{
+    asynStatus status;
+    try
+    {
+        status = setDoubleParam(findParam(name)->index, value);
+    }
+    catch (...)
+    {
+        std::cerr << "Error updating parameter " << name << std::endl;
+        status = asynError;
+    }
+    return status;
+}
+
+const ReadASCII::LookupTableColumn* ReadASCII::findColumnByHeader(const std::string& header) const
+{
+    std::vector<LookupTableColumn>::const_iterator it = std::find_if(lookupTable.begin(), lookupTable.end(),
+        [&](LookupTableColumn column) {return column.header == header; });
+    if (it != lookupTable.end())
+    {
+        return &(*it);
+    }
+    else
+    {
+        throw std::out_of_range("Column not found!");
+    }
 }
 
 bool ReadASCII::isModified(const char *checkDir)
@@ -638,18 +853,14 @@ bool ReadASCII::isModified(const char *checkDir)
     //Checks if a given directory has been modified since last check. Returns true if modified.
     double diff = 0.0;
     struct stat buf;
-    time_t newModified;
 
-    if (stat(checkDir, &buf) >= 0)
+    if (stat(checkDir, &buf) == 0)
     {
-        newModified = buf.st_mtime;
+        diff = difftime(buf.st_mtime, lastModified);
 
-        diff = difftime(newModified, lastModified);
+        lastModified = buf.st_mtime;
 
-        lastModified = newModified;
-
-        if (0.0 == diff) return false;
-        else return true;
+        return (0.0 == diff ? false : true);
     }
     else{
         //send a file not found error?
