@@ -23,9 +23,16 @@ ReadASCII_LIBS += asyn utilities
 ReadASCII_LIBS += asubFunctions
 ReadASCII_SYS_LIBS_WIN32 += ws2_32
 
+# googletets runner
+GTESTPROD_HOST += runner
+runner_SRCS += ReadASCII_tests.cpp
+runner_LIBS += ReadASCII
+GTESTS += runner
+
 #===========================
 
 include $(TOP)/configure/RULES
 #----------------------------------------
 #  ADD RULES AFTER THIS LINE
 
+-include $(GTEST)/cfg/compat.RULES_BUILD

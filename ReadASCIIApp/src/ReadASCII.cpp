@@ -1,8 +1,8 @@
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
+#include <cstdlib>
+#include <cstring>
+#include <cstdio>
 #include <errno.h>
-#include <math.h>
+#include <cmath>
 #include <exception>
 #include <iostream>
 #include <boost/algorithm/string.hpp>
@@ -22,12 +22,13 @@
 
 #include <sys/stat.h>
 
-#include "ReadASCII.h"
-
 #include <macLib.h>
 #include <epicsGuard.h>
+#include "asynPortDriver.h"
 
 #include <epicsExport.h>
+
+#include "ReadASCII.h"
 
 #define INIT_ROW_NUM 60
 #define EPSILON 0.001
@@ -84,12 +85,7 @@ ReadASCII::ReadASCII(const char *portName, const char *searchDir, const int step
     setIntegerParam(P_LookUpOn, 0);
 
     //Try to read file once to load parameters
-    char localDir[DIR_LENGTH], dirBase[DIR_LENGTH];
-    getStringParam(P_DirBase, DIR_LENGTH, dirBase);
-    getStringParam(P_Dir, DIR_LENGTH, localDir);
-    strcat(dirBase, "/");
-    strcat(dirBase, localDir);
-    readFile(dirBase);
+    readFileBasedOnParameters();
 
     //From now on parameters need to be created dynamically
     dynamicParameters = true;
@@ -116,6 +112,20 @@ ReadASCII::ReadASCII(const char *portName, const char *searchDir, const int step
 
 }
 
+// private constructor for testing
+ReadASCII::ReadASCII()
+   : asynPortDriver(std::to_string(rand()).c_str(), // this is so each test gets a unique port
+                    0, /* maxAddr */ 
+                    asynInt32Mask | asynFloat64Mask | asynFloat64ArrayMask | asynOctetMask | asynDrvUserMask, /* Interface mask */
+                    asynInt32Mask | asynFloat64Mask | asynFloat64ArrayMask | asynOctetMask,  /* Interrupt mask */
+                    ASYN_CANBLOCK, /* asynFlags.  This driver can block but it is not multi-device */
+                    0, /* Autoconnect */
+                    0, /* Default priority */
+                    0)	/* Default stack size*/
+{
+}
+
+
 asynStatus ReadASCII::drvUserCreate(asynUser* pasynUser, const char* drvInfo, const char** pptypeName, size_t* psize)
 {
     if (!dynamicParameters)
@@ -131,7 +141,7 @@ asynStatus ReadASCII::drvUserCreate(asynUser* pasynUser, const char* drvInfo, co
     {
         std::cerr << "ReadASCII:: Parameter missing: " << drvInfo << ", adding dynamically." << std::endl;
         std::string name = std::string(drvInfo);
-        if (name.find(ARRAY_PARAMETER_PREFIX) != std::string::npos) {
+        if (name.compare(0, strlen(ARRAY_PARAMETER_PREFIX), ARRAY_PARAMETER_PREFIX) == 0) {
             // Callback will be set when the table values updates (populateLookupTable code)
             addParameter(name, asynParamFloat64Array);
         }
@@ -215,10 +225,12 @@ asynStatus ReadASCII::writeInt32(asynUser *pasynUser, epicsInt32 value)
                 {
                     updateParameter(col.values[value], col.header);
                     if (!quietOnSetPoint) {
-                        std::cerr << col.header << ": " << col.values[value] << ", ";
+                        std::cerr << col.header << "=" << col.values[value] << " ";
                     }
                 }
-                std::cerr << std::endl;
+                if (!quietOnSetPoint) {
+                    std::cerr << std::endl;
+                }
             }
             else
             {
@@ -352,7 +364,7 @@ asynStatus ReadASCII::readFloat64Array(asynUser *pasynUser, epicsFloat64 *value,
     std::string header = findParam(function)->name;
     try
     {
-        LookupTableColumn* column = findColumnByHeader(header.substr(std::string(ARRAY_PARAMETER_PREFIX).size()));
+        const LookupTableColumn* column = findColumnByHeader(header.substr(std::string(ARRAY_PARAMETER_PREFIX).size()));
         memcpy(value, column->values.data(), ncopy * sizeof(epicsFloat64));
         *nIn = ncopy;
     }
@@ -360,6 +372,7 @@ asynStatus ReadASCII::readFloat64Array(asynUser *pasynUser, epicsFloat64 *value,
     {
         std::cerr << "ReadASCII: unable to retrieve array data" << std::endl;
         *nIn = 0;
+        status = asynError;
     }
 
     if (status)
@@ -464,7 +477,7 @@ void ReadASCII::rampThread(void)
             getDoubleParam(P_CurTemp, &curSP);
             updateParameter(curSP, P_SPOutString);
             //setDoubleParam(findParamByName(P_SPOutString)->index, curSP);
-            std::cerr << "ReadASCII: RAMP: new SP " << newSP << std::endl;
+            std::cerr << "ReadASCII: RAMP: new SP " << curSP << std::endl;
             callParamCallbacks();
             continue;
         }
@@ -536,12 +549,13 @@ void ReadASCII::updateTableValues(int index)
     }
     // Set to minus one first and then the actual value.
     // This marks the value as "changed" so that the monitor actually gets fired.
+    // start loop at 1 as lookupTable[0] is the SP
     std::cerr << "ReadASCII: Updating values: ";
     for (int i = 1; i < lookupTable.size(); i++)
     {
         updateParameter(-1, lookupTable[i].header);
         updateParameter(lookupTable[i].values[index], lookupTable[i].header);
-        std::cerr << lookupTable[i].header << "=" << lookupTable[i].values[index];
+        std::cerr << lookupTable[i].header << "=" << lookupTable[i].values[index] << " ";
     }
     std::cerr << std::endl;
 }
@@ -563,7 +577,7 @@ void ReadASCII::checkLookUp (double newSP, double oldSP)
 void ReadASCII::readFilePoll(void)
 {
     //Thread to poll the file used in the PID lookup and update the array of values when the file is modified
-    char localDir[DIR_LENGTH], dirBase[DIR_LENGTH];
+    char localDir[DIR_LENGTH], dirBase[DIR_LENGTH * 2  + 1];
     asynStatus status;
 
     while (1) {
@@ -607,9 +621,10 @@ asynStatus ReadASCII::readFile(const char *dir)
         //send a file not found error
         std::cerr << "ReadASCII: File Open Failed: " << dir << ": " << strerror(errno) << std::endl;
         fileBad = true;
+        rowNum = 0;
         return asynError;
     }
-    std::vector<std::vector<std::string>> valuesTable = splitFileToColumns(file);
+    std::vector<std::vector<std::string>> valuesTable = splitStreamToColumns(file);
     file.close();
 
     populateLookupTable(valuesTable);
@@ -658,7 +673,7 @@ asynStatus ReadASCII::populateLookupTable(const std::vector<std::vector<std::str
         std::cerr << "ReadASCII: Warning - lookup file is empty" << std::endl;
         return asynError;
     }
-    rowNum = values[0].size() - 1;
+    rowNum = values[0].size() - 1; // -1 as header row
 
     //for every column
     for (const std::vector<std::string>& column : values)
@@ -720,7 +735,7 @@ asynStatus ReadASCII::populateLookupTable(const std::vector<std::vector<std::str
     return asynSuccess;
 }
 
-std::vector<std::vector<std::string>> ReadASCII::splitFileToColumns(std::ifstream& stream)
+std::vector<std::vector<std::string>> ReadASCII::splitStreamToColumns(std::istream& stream)
 {
     std::vector<std::vector<std::string>> columns = std::vector<std::vector<std::string>>();
 
@@ -811,13 +826,17 @@ asynStatus ReadASCII::updateParameter(epicsFloat64 value, const std::string& nam
     {
         status = setDoubleParam(findParam(name)->index, value);
     }
-    catch (...) { }
+    catch (...)
+    {
+        std::cerr << "Error updating parameter " << name << std::endl;
+        status = asynError;
+    }
     return status;
 }
 
-ReadASCII::LookupTableColumn* ReadASCII::findColumnByHeader(std::string header)
+const ReadASCII::LookupTableColumn* ReadASCII::findColumnByHeader(const std::string& header) const
 {
-    std::vector<LookupTableColumn>::iterator it = std::find_if(lookupTable.begin(), lookupTable.end(),
+    std::vector<LookupTableColumn>::const_iterator it = std::find_if(lookupTable.begin(), lookupTable.end(),
         [&](LookupTableColumn column) {return column.header == header; });
     if (it != lookupTable.end())
     {
@@ -834,18 +853,14 @@ bool ReadASCII::isModified(const char *checkDir)
     //Checks if a given directory has been modified since last check. Returns true if modified.
     double diff = 0.0;
     struct stat buf;
-    time_t newModified;
 
-    if (stat(checkDir, &buf) >= 0)
+    if (stat(checkDir, &buf) == 0)
     {
-        newModified = buf.st_mtime;
+        diff = difftime(buf.st_mtime, lastModified);
 
-        diff = difftime(newModified, lastModified);
+        lastModified = buf.st_mtime;
 
-        lastModified = newModified;
-
-        if (0.0 == diff) return false;
-        else return true;
+        return (0.0 == diff ? false : true);
     }
     else{
         //send a file not found error?

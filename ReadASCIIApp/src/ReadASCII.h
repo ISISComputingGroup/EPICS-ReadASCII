@@ -3,18 +3,21 @@
 
 /// @file ReadASCII.h Header for read ASCII driver
 
-#include "asynPortDriver.h"
 #include <time.h>
 #include <map>
+#include "asynPortDriver.h"
 
 #define DIR_LENGTH 260
 
+class ReadASCIITest;
+
 /// Driver for Ramping SPs and Reading PIDs
-class ReadASCII : public asynPortDriver 
+class epicsShareClass ReadASCII : public asynPortDriver 
 {
+    friend class ReadASCIITest;
+    
 public:
     ReadASCII(const char* portName, const char *searchDir, const int stepsPerMinute, const bool logOnSetPoint);
-
 
     virtual asynStatus writeOctet(asynUser *pasynUser, const char *value, size_t maxChars, size_t *nActual);
     virtual asynStatus writeInt32(asynUser *pasynUser, epicsInt32 value);
@@ -67,6 +70,8 @@ protected:
     std::vector<LookupTableColumn> lookupTable;
 
 private:
+    ReadASCII(); // private constructor, only used by test framework
+
     //This is for dynamically creating asyn parameters
     asynStatus drvUserCreate(asynUser* pasynUser, const char* drvInfo, const char** pptypeName, size_t* psize);
 
@@ -99,9 +104,9 @@ private:
 
     asynStatus updateParameter(epicsFloat64 value, const std::string& name);
 
-    LookupTableColumn* findColumnByHeader(std::string header);
-    std::vector<std::vector<std::string>> splitFileToColumns(std::ifstream& stream);
-    std::vector<std::string> splitLine(const std::string& line, char delim);
+    const LookupTableColumn* findColumnByHeader(const std::string& header) const;
+    static std::vector<std::vector<std::string>> splitStreamToColumns(std::istream& stream);
+    static std::vector<std::string> splitLine(const std::string& line, char delim);
 };
 #define ARRAY_PARAMETER_PREFIX "ARR"
 
