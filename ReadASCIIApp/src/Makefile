@@ -28,6 +28,9 @@ runner_SRCS += ReadASCII_tests.cpp
 runner_LIBS += ReadASCII $(ReadASCII_LIBS) pcrecpp pcre
 GTESTS += runner
 
+# fix PATH for when tests are run, need to use : on linux, so need to generalise
+export PATH := $(ASYN)/bin/$(EPICS_HOST_ARCH);$(PATH)
+
 #===========================
 
 include $(TOP)/configure/RULES
