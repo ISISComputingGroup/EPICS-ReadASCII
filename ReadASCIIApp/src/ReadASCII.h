@@ -8,6 +8,7 @@
 #include "asynPortDriver.h"
 
 #define DIR_LENGTH 260
+#define DEFAULT_RAMP_FILE "Default.txt"
 
 class ReadASCIITest;
 
@@ -36,6 +37,7 @@ protected:
     int P_Ramping; //int
     int P_RampOn; //int
     int P_LookUpOn; //int
+	int P_LookUpTableChanged; //int
 
     int P_RampRate; //float
     int P_StepsPerMin; //float
@@ -117,6 +119,8 @@ private:
 #define P_RampingString "CURRMP"
 #define P_RampOnString "RMP"
 #define P_LookUpOnString "LUT"
+#define P_LookUpTableChangedString "LUTCG"
+
 
 #define P_TargetString "TGT"
 #define P_SPRBVString "TGT:RBV"
@@ -125,4 +129,5 @@ private:
 #define P_CurTempString "CUR"
 
 #define P_SPOutString "SP"
+
 #endif /* READASCII_H */
