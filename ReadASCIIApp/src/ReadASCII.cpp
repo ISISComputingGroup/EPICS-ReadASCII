@@ -61,7 +61,7 @@ ReadASCII::ReadASCII(const char *portName, const char *searchDir, const int step
     addParameter(P_RampingString, asynParamInt32, &P_Ramping);
     addParameter(P_RampOnString, asynParamInt32, &P_RampOn);
     addParameter(P_LookUpOnString, asynParamInt32, &P_LookUpOn);
-	addParameter(P_LookUpTableChangedString, asynParamInt32, &P_LookUpTableChanged);
+	addParameter(P_LookUpTableNotDefaultString, asynParamInt32, &P_LookUpTableNotDefault);
 
     addParameter(P_TargetString, asynParamFloat64, &P_Target);
     addParameter(P_SPRBVString, asynParamFloat64, &P_SPRBV);
@@ -73,7 +73,7 @@ ReadASCII::ReadASCII(const char *portName, const char *searchDir, const int step
 
     //Init
     setStringParam(P_Dir, DEFAULT_RAMP_FILE);
-	setIntegerParam(P_LookUpTableChanged, 0);
+	setIntegerParam(P_LookUpTableNotDefault, 0);
     setStringParam(P_DirBase, searchDir);
     fileBad = true;
     rowNum = 0;
@@ -178,9 +178,9 @@ asynStatus ReadASCII::writeOctet(asynUser *pasynUser, const char *value, size_t 
 		// If directory has changed (and not to default) then update
 		getStringParam(P_Dir, DIR_LENGTH, localDir);
 		if(strncmp(DEFAULT_RAMP_FILE, localDir, DIR_LENGTH) == 0){
-			setIntegerParam(P_LookUpTableChanged, 0);
+			setIntegerParam(P_LookUpTableNotDefault, 0);
 		} else {
-			setIntegerParam(P_LookUpTableChanged, 1);
+			setIntegerParam(P_LookUpTableNotDefault, 1);
 		}
 		
     }

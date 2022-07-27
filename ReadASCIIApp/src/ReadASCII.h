@@ -37,7 +37,7 @@ protected:
     int P_Ramping; //int
     int P_RampOn; //int
     int P_LookUpOn; //int
-	int P_LookUpTableChanged; //int
+	int P_LookUpTableNotDefault; //int
 
     int P_RampRate; //float
     int P_StepsPerMin; //float
@@ -119,7 +119,7 @@ private:
 #define P_RampingString "CURRMP"
 #define P_RampOnString "RMP"
 #define P_LookUpOnString "LUT"
-#define P_LookUpTableChangedString "LUTCG"
+#define P_LookUpTableNotDefaultString "LUTNDF"
 
 
 #define P_TargetString "TGT"
