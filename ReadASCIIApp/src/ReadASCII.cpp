@@ -61,6 +61,7 @@ ReadASCII::ReadASCII(const char *portName, const char *searchDir, const int step
     addParameter(P_RampingString, asynParamInt32, &P_Ramping);
     addParameter(P_RampOnString, asynParamInt32, &P_RampOn);
     addParameter(P_LookUpOnString, asynParamInt32, &P_LookUpOn);
+	addParameter(P_LookUpTableNotDefaultString, asynParamInt32, &P_LookUpTableNotDefault);
 
     addParameter(P_TargetString, asynParamFloat64, &P_Target);
     addParameter(P_SPRBVString, asynParamFloat64, &P_SPRBV);
@@ -71,18 +72,21 @@ ReadASCII::ReadASCII(const char *portName, const char *searchDir, const int step
     addParameter(P_SPOutString, asynParamFloat64);
 
     //Init
-    setStringParam(P_Dir, "Default.txt");
+    setStringParam(P_Dir, DEFAULT_RAMP_FILE);
+	setIntegerParam(P_LookUpTableNotDefault, 0);
     setStringParam(P_DirBase, searchDir);
     fileBad = true;
     rowNum = 0;
     lastModified = 0;
     quietOnSetPoint = setQuietOnSetPoint;
+	
 
     setDoubleParam(P_RampRate, 1.0);
     setDoubleParam(P_StepsPerMin, stepsPerMinute);
     setIntegerParam(P_Ramping, 0);
     setIntegerParam(P_RampOn, 0);
     setIntegerParam(P_LookUpOn, 0);
+	
 
     //Try to read file once to load parameters
     readFileBasedOnParameters();
@@ -125,7 +129,6 @@ ReadASCII::ReadASCII()
 {
 }
 
-
 asynStatus ReadASCII::drvUserCreate(asynUser* pasynUser, const char* drvInfo, const char** pptypeName, size_t* psize)
 {
     if (!dynamicParameters)
@@ -160,6 +163,7 @@ asynStatus ReadASCII::writeOctet(asynUser *pasynUser, const char *value, size_t 
     int status = asynSuccess;
     const char *paramName;
     const char* functionName = "writeOctet";
+	char localDir[DIR_LENGTH];
 
     /* Set the parameter in the parameter library. */
     status = (asynStatus)setStringParam(function, value);
@@ -170,6 +174,15 @@ asynStatus ReadASCII::writeOctet(asynUser *pasynUser, const char *value, size_t 
     if (function == P_Dir || function == P_DirBase) {
         // Directory has changed so update
         status |= readFileBasedOnParameters();
+		
+		// If directory has changed (and not to default) then update
+		getStringParam(P_Dir, DIR_LENGTH, localDir);
+		if(strncmp(DEFAULT_RAMP_FILE, localDir, DIR_LENGTH) == 0){
+			setIntegerParam(P_LookUpTableNotDefault, 0);
+		} else {
+			setIntegerParam(P_LookUpTableNotDefault, 1);
+		}
+		
     }
 
     /* Do callbacks so higher layers see any changes */
