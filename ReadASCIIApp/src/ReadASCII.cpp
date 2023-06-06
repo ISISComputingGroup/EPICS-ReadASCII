@@ -39,7 +39,7 @@ void rampThread(void *drvPvt);
 
 /// Constructor for the ReadASCII class.
 /// Calls constructor for the asynPortDriver base class.
-ReadASCII::ReadASCII(const char *portName, const char *searchDir, const int stepsPerMinute, const bool setQuietOnSetPoint)
+ReadASCII::ReadASCII(const char *portName, const char *searchDir, const double rampRate, const int stepsPerMinute, const bool setQuietOnSetPoint)
    : asynPortDriver(portName, 
                     0, /* maxAddr */ 
                     asynInt32Mask | asynFloat64Mask | asynFloat64ArrayMask | asynOctetMask | asynDrvUserMask, /* Interface mask */
@@ -81,7 +81,7 @@ ReadASCII::ReadASCII(const char *portName, const char *searchDir, const int step
     quietOnSetPoint = setQuietOnSetPoint;
 	
 
-    setDoubleParam(P_RampRate, 1.0);
+    setDoubleParam(P_RampRate, rampRate);
     setDoubleParam(P_StepsPerMin, stepsPerMinute);
     setIntegerParam(P_Ramping, 0);
     setIntegerParam(P_RampOn, 0);
@@ -905,13 +905,14 @@ extern "C" {
 /// EPICS iocsh callable function to call constructor of ReadASCII().
 /// \param[in] portName @copydoc initArg0
 /// \param[in] rampDir @copydoc initArg1
-/// \param[in] stepsPerMinute @copydoc initArg2
-/// \param[in] logOnSetPoint @copydoc initArg3
-int ReadASCIIConfigure(const char *portName, const char *rampDir, const int stepsPerMinute, const bool logOnSetPoint)
+/// \param[in] rampRate @copydoc initArg2
+/// \param[in] stepsPerMinute @copydoc initArg3
+/// \param[in] logOnSetPoint @copydoc initArg4
+int ReadASCIIConfigure(const char *portName, const char *rampDir, const double rampRate, const int stepsPerMinute, const bool logOnSetPoint)
 {
     try
     {
-        new ReadASCII(portName, rampDir, stepsPerMinute, logOnSetPoint);
+        new ReadASCII(portName, rampDir, rampRate, stepsPerMinute, logOnSetPoint);
         return(asynSuccess);
     }
     catch(const std::exception& ex)
@@ -923,18 +924,20 @@ int ReadASCIIConfigure(const char *portName, const char *rampDir, const int step
 
 // EPICS iocsh shell commands 
 
-static const iocshArg initArg0 = { "portName", iocshArgString};			 ///< The name of the asyn driver port we will create
+static const iocshArg initArg0 = { "portName", iocshArgString};			///< The name of the asyn driver port we will create
 static const iocshArg initArg1 = { "PIDDir", iocshArgString};           ///< Initial directory for the PID file
-static const iocshArg initArg2 = { "stepsPerMinute", iocshArgInt };      ///< Initial steps per minute
-static const iocshArg initArg3 = { "quietOnSetPoint", iocshArgInt };     ///< Stop logging on every set point change set to 1 to supress logging (useful if you change the set points very frequently), defaults to 0
+static const iocshArg initArg2 = { "rampRate", iocshArgDouble };        ///< Initial ramp rate per minute
+static const iocshArg initArg3 = { "stepsPerMinute", iocshArgInt };     ///< Initial steps per minute
+static const iocshArg initArg4 = { "quietOnSetPoint", iocshArgInt };    ///< Stop logging on every set point change set to 1 to supress logging (useful if you change the set points very frequently), defaults to 0
 
-static const iocshArg * const initArgs[] = { &initArg0, &initArg1, &initArg2, &initArg3 };
+
+static const iocshArg * const initArgs[] = { &initArg0, &initArg1, &initArg2, &initArg3, &initArg4 };
 
 static const iocshFuncDef initFuncDef = {"ReadASCIIConfigure", sizeof(initArgs) / sizeof(iocshArg*), initArgs};
 
 static void initCallFunc(const iocshArgBuf *args)
 {
-    ReadASCIIConfigure(args[0].sval, args[1].sval, args[2].ival, (bool)args[3].ival);
+    ReadASCIIConfigure(args[0].sval, args[1].sval, args[2].dval, args[3].ival, (bool)args[4].ival);
 }
 
 static void ReadASCIIRegister(void)

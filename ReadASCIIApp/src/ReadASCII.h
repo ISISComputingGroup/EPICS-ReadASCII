@@ -18,7 +18,7 @@ class epicsShareClass ReadASCII : public asynPortDriver
     friend class ReadASCIITest;
     
 public:
-    ReadASCII(const char* portName, const char *searchDir, const int stepsPerMinute, const bool logOnSetPoint);
+    ReadASCII(const char* portName, const char *searchDir, const double rampRate, const int stepsPerMinute, const bool logOnSetPoint);
 
     virtual asynStatus writeOctet(asynUser *pasynUser, const char *value, size_t maxChars, size_t *nActual);
     virtual asynStatus writeInt32(asynUser *pasynUser, epicsInt32 value);
