@@ -26,7 +26,7 @@ ReadASCIITest_registerRecordDeviceDriver pdbbase
 
 ## Load our record instances
 #dbLoadRecords("db/xxx.db","user=ffv81422Host")
-ReadASCIIConfigure("testREAD", "$(RAMP_DIR)", 20)
+ReadASCIIConfigure("testREAD", "$(RAMP_DIR)", 1, 20)
 dbLoadRecords("$(TOP)/db/ReadASCII.db","P=$(MYPVPREFIX)$(IOCNAME):,READ=testREAD,ADDR=0,TIMEOUT=1, RDIR=$(RAMP_DIR)")
 
 ##ISIS## Stuff that needs to be done after all records are loaded but before iocInit is called 
