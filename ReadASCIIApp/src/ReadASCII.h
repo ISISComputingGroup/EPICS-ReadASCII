@@ -5,6 +5,7 @@
 
 #include <time.h>
 #include <map>
+#include <shareLib.h>
 #include "asynPortDriver.h"
 
 #define DIR_LENGTH 260
